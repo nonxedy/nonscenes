@@ -1,0 +1,39 @@
+# nonscenes configuration
+
+settings:
+  # Maximum frames per second for recording (default: 100)
+  frames-per-second: 100
+  
+  # Countdown seconds before recording starts
+  countdown-seconds: 3
+  
+  # Particle settings for path visualization
+  path-visualization:
+    # Particle type (REDSTONE, FLAME, END_ROD, etc.)
+    particle: END_ROD
+    # Duration in seconds to show the path
+    duration: 30
+    # Interval between particles (in blocks)
+    spacing: 0.5
+    
+  # Playback settings
+  playback:
+    # Whether to hide the player during cutscene playback
+    hide-player: true
+    # Whether to make player invulnerable during cutscene playback
+    invulnerable: true
+    # Whether to disable player input during cutscene playback
+    disable-input: true
+    
+storage:
+  # Storage type: YAML or MYSQL (currently only YAML is implemented)
+  type: YAML
+  
+  # MySQL settings (if storage type is MYSQL)
+  mysql:
+    host: localhost
+    port: 3306
+    database: minecraft
+    username: root
+    password: password
+    table-prefix: nonscenes_
