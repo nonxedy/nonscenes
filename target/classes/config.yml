@@ -27,20 +27,20 @@ settings:
     
 storage:
   # Storage type: SQLITE, MYSQL, POSTGRESQL, MONGODB, REDIS
-  # SQLITE - хранит данные в файле cutscenes.db (рекомендуется для одиночных серверов)
-  # MYSQL - MySQL/MariaDB база данных (рекомендуется для сетей серверов)
-  # POSTGRESQL - PostgreSQL база данных
-  # MONGODB - MongoDB документная база данных
-  # REDIS - Redis in-memory хранилище (для кеширования)
+  # SQLITE - Store files in cutscenes.db (recommended for dafault servers)
+  # MYSQL - MySQL/MariaDB database (recommended for network servers)
+  # POSTGRESQL - PostgreSQL database
+  # MONGODB - MongoDB document database
+  # REDIS - Redis in-memory database (for caching)
   type: SQLITE
 
-  # SQLite settings (используется только при type: SQLITE)
+  # SQLite settings (Using only with type: SQLITE)
   sqlite:
-    # Путь к файлу базы данных (относительно папки плагина)
-    # Если не указан, используется cutscenes.db в папке плагина
+    # Path to the database file (relative to the plugin folder)
+    # If not specified, cutscenes.db in the plugin folder is used.
     file-path: "cutscenes.db"
 
-  # MySQL settings (используется только при type: MYSQL)
+  # MySQL settings (Using only with type: MYSQL)
   mysql:
     host: localhost
     port: 3306
@@ -48,7 +48,7 @@ storage:
     username: root
     password: password
     table-prefix: nonscenes_
-    # Настройки пула соединений
+    # Connection pool settings
     pool:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -56,7 +56,7 @@ storage:
       idle-timeout: 600000
       max-lifetime: 1800000
 
-  # PostgreSQL settings (используется только при type: POSTGRESQL)
+  # PostgreSQL settings (Using only with type: POSTGRESQL)
   postgresql:
     host: localhost
     port: 5432
@@ -64,7 +64,7 @@ storage:
     username: postgres
     password: password
     schema: public
-    # Настройки пула соединений
+    # Connection pool settings
     pool:
       maximum-pool-size: 10
       minimum-idle: 2
@@ -72,7 +72,7 @@ storage:
       idle-timeout: 600000
       max-lifetime: 1800000
 
-  # MongoDB settings (используется только при type: MONGODB)
+  # MongoDB settings (Using only with type: MONGODB)
   mongodb:
     host: localhost
     port: 27017
@@ -80,29 +80,29 @@ storage:
     collection: cutscenes
     username: ""
     password: ""
-    # Опции подключения
+    # Connection options
     options:
       connect-timeout: 10000
       server-selection-timeout: 30000
 
-  # Redis settings (используется только при type: REDIS)
+  # Redis settings (Using only with type: REDIS)
   redis:
     host: localhost
     port: 6379
     database: 0
     password: ""
-    # Настройки пула соединений
+    # Connection pool settings
     pool:
       max-total: 20
       max-idle: 10
       min-idle: 2
       timeout: 3000
 
-  # Общие настройки для всех типов баз данных
+  # General settings for all database types
   general:
-    # Автоматически создавать таблицы/коллекции при запуске
+    # Automatically create tables/collections on startup
     auto-create-tables: true
-    # Максимальное количество попыток подключения
+    # Maximum number of connection attempts
     max-retry-attempts: 3
-    # Задержка между попытками подключения (в секундах)
+    # Delay between connection attempts (in seconds)
     retry-delay: 5
