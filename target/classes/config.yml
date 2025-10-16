@@ -26,10 +26,21 @@ settings:
     disable-input: true
     
 storage:
-  # Storage type: YAML or MYSQL (currently only YAML is implemented)
-  type: YAML
-  
-  # MySQL settings (if storage type is MYSQL)
+  # Storage type: SQLITE, MYSQL, POSTGRESQL, MONGODB, REDIS
+  # SQLITE - хранит данные в файле cutscenes.db (рекомендуется для одиночных серверов)
+  # MYSQL - MySQL/MariaDB база данных (рекомендуется для сетей серверов)
+  # POSTGRESQL - PostgreSQL база данных
+  # MONGODB - MongoDB документная база данных
+  # REDIS - Redis in-memory хранилище (для кеширования)
+  type: SQLITE
+
+  # SQLite settings (используется только при type: SQLITE)
+  sqlite:
+    # Путь к файлу базы данных (относительно папки плагина)
+    # Если не указан, используется cutscenes.db в папке плагина
+    file-path: "cutscenes.db"
+
+  # MySQL settings (используется только при type: MYSQL)
   mysql:
     host: localhost
     port: 3306
@@ -37,3 +48,61 @@ storage:
     username: root
     password: password
     table-prefix: nonscenes_
+    # Настройки пула соединений
+    pool:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # PostgreSQL settings (используется только при type: POSTGRESQL)
+  postgresql:
+    host: localhost
+    port: 5432
+    database: minecraft
+    username: postgres
+    password: password
+    schema: public
+    # Настройки пула соединений
+    pool:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  # MongoDB settings (используется только при type: MONGODB)
+  mongodb:
+    host: localhost
+    port: 27017
+    database: minecraft
+    collection: cutscenes
+    username: ""
+    password: ""
+    # Опции подключения
+    options:
+      connect-timeout: 10000
+      server-selection-timeout: 30000
+
+  # Redis settings (используется только при type: REDIS)
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+    password: ""
+    # Настройки пула соединений
+    pool:
+      max-total: 20
+      max-idle: 10
+      min-idle: 2
+      timeout: 3000
+
+  # Общие настройки для всех типов баз данных
+  general:
+    # Автоматически создавать таблицы/коллекции при запуске
+    auto-create-tables: true
+    # Максимальное количество попыток подключения
+    max-retry-attempts: 3
+    # Задержка между попытками подключения (в секундах)
+    retry-delay: 5

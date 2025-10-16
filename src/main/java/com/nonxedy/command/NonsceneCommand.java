@@ -1,18 +1,19 @@
 package com.nonxedy.command;
 
-import com.nonxedy.Nonscenes;
-import com.nonxedy.core.ConfigManager;
-import com.nonxedy.core.CutsceneManager;
-import com.nonxedy.util.ColorUtil;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.stream.Collectors;
+
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandExecutor;
 import org.bukkit.command.CommandSender;
 import org.bukkit.command.TabCompleter;
 import org.bukkit.entity.Player;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
+import com.nonxedy.Nonscenes;
+import com.nonxedy.core.ConfigManager;
+import com.nonxedy.core.CutsceneManager;
+import com.nonxedy.util.ColorUtil;
 
 public class NonsceneCommand implements CommandExecutor, TabCompleter {
     private final Nonscenes plugin;
@@ -118,15 +119,15 @@ public class NonsceneCommand implements CommandExecutor, TabCompleter {
                     player.sendMessage(configManager.getMessage("no-permission"));
                     return true;
                 }
-                
+
                 if (args.length < 2) {
                     player.sendMessage(configManager.getMessage("specify-cutscene-name"));
                     return true;
                 }
-                
+
                 cutsceneManager.showCutscenePath(player, args[1]);
                 break;
-                
+
             default:
                 sendHelpMessage(player);
                 break;

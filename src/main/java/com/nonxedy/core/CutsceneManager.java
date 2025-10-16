@@ -1,9 +1,15 @@
 package com.nonxedy.core;
 
-import com.nonxedy.Nonscenes;
-import com.nonxedy.model.Cutscene;
-import com.nonxedy.model.CutsceneFrame;
-import com.nonxedy.util.ColorUtil;
+import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.logging.Level;
+
 import org.bukkit.Bukkit;
 import org.bukkit.Location;
 import org.bukkit.Particle;
@@ -15,15 +21,16 @@ import org.bukkit.scheduler.BukkitRunnable;
 import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
-import java.io.File;
-import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.logging.Level;
+import com.nonxedy.Nonscenes;
+import com.nonxedy.database.service.CutsceneDatabaseService;
+import com.nonxedy.model.Cutscene;
+import com.nonxedy.model.CutsceneFrame;
+import com.nonxedy.util.ColorUtil;
 
 public class CutsceneManager {
     private final Nonscenes plugin;
     private final ConfigManager configManager;
+    private final CutsceneDatabaseService databaseService;
     private final Map<String, Cutscene> cutscenes = new HashMap<>();
     private final Map<UUID, String> recordingSessions = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> recordingTasks = new ConcurrentHashMap<>();
@@ -36,30 +43,57 @@ public class CutsceneManager {
     public CutsceneManager(Nonscenes plugin) {
         this.plugin = plugin;
         this.configManager = plugin.getConfigManager();
+        this.databaseService = plugin.getDatabaseService();
         this.cutsceneFolder = new File(plugin.getDataFolder(), "cutscenes");
-        
+
         if (!cutsceneFolder.exists()) {
             cutsceneFolder.mkdirs();
         }
-        
+
         loadAllCutscenes();
     }
 
     private void loadAllCutscenes() {
+        try {
+            List<Cutscene> loadedCutscenes = databaseService.loadAllCutscenes();
+
+            for (Cutscene cutscene : loadedCutscenes) {
+                cutscenes.put(cutscene.getName().toLowerCase(), cutscene);
+            }
+
+            plugin.getLogger().info("Loaded " + cutscenes.size() + " cutscenes from database");
+
+            // Also try to load from files for backward compatibility
+            loadCutscenesFromFiles();
+
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to load cutscenes from database", e);
+            // Fallback to file loading
+            loadCutscenesFromFiles();
+        }
+    }
+
+    private void loadCutscenesFromFiles() {
         File[] files = cutsceneFolder.listFiles((dir, name) -> name.endsWith(".yml"));
-        
+
         if (files == null) {
             return;
         }
-        
+
+        int fileCount = 0;
         for (File file : files) {
             try {
                 FileConfiguration config = YamlConfiguration.loadConfiguration(file);
                 String name = file.getName().replace(".yml", "");
-                
+
+                // Skip if already loaded from database
+                if (cutscenes.containsKey(name.toLowerCase())) {
+                    continue;
+                }
+
                 List<CutsceneFrame> frames = new ArrayList<>();
                 ConfigurationSection framesSection = config.getConfigurationSection("frames");
-                
+
                 if (framesSection != null) {
                     for (String key : framesSection.getKeys(false)) {
                         ConfigurationSection frameSection = framesSection.getConfigurationSection(key);
@@ -70,7 +104,7 @@ public class CutsceneManager {
                             double z = frameSection.getDouble("z");
                             float yaw = (float) frameSection.getDouble("yaw");
                             float pitch = (float) frameSection.getDouble("pitch");
-                            
+
                             if (worldName != null && Bukkit.getWorld(worldName) != null) {
                                 Location location = new Location(Bukkit.getWorld(worldName), x, y, z, yaw, pitch);
                                 frames.add(new CutsceneFrame(location));
@@ -78,17 +112,28 @@ public class CutsceneManager {
                         }
                     }
                 }
-                
+
                 if (!frames.isEmpty()) {
                     Cutscene cutscene = new Cutscene(name, frames);
                     cutscenes.put(name.toLowerCase(), cutscene);
+                    fileCount++;
+
+                    // Try to save to database for migration
+                    try {
+                        databaseService.saveCutscene(cutscene);
+                        plugin.getLogger().info("Migrated cutscene from file to database: " + name);
+                    } catch (Exception dbException) {
+                        plugin.getLogger().log(Level.WARNING, "Failed to migrate cutscene to database: " + name, dbException);
+                    }
                 }
             } catch (Exception e) {
                 plugin.getLogger().log(Level.WARNING, "Failed to load cutscene from file: " + file.getName(), e);
             }
         }
-        
-        plugin.getLogger().info("Loaded " + cutscenes.size() + " cutscenes");
+
+        if (fileCount > 0) {
+            plugin.getLogger().info("Loaded " + fileCount + " cutscenes from files");
+        }
     }
 
     public void saveAllCutscenes() {
@@ -131,10 +176,21 @@ public class CutsceneManager {
             return;
         }
         
+        // Check if cutscene exists in database or memory
         if (cutscenes.containsKey(name.toLowerCase())) {
             player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-already-exists")
                     .replace("{name}", name)));
             return;
+        }
+
+        try {
+            if (databaseService.cutsceneExists(name)) {
+                player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-already-exists")
+                        .replace("{name}", name)));
+                return;
+            }
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.WARNING, "Failed to check if cutscene exists in database: " + name, e);
         }
         
         int countdownSeconds = configManager.getConfig().getInt("settings.countdown-seconds", 3);
@@ -198,15 +254,21 @@ public class CutsceneManager {
 
     private void finishRecording(Player player, String name, List<CutsceneFrame> frames) {
         UUID playerId = player.getUniqueId();
-        
+
         Cutscene cutscene = new Cutscene(name, frames);
         cutscenes.put(name.toLowerCase(), cutscene);
-        saveCutscene(cutscene);
-        
-        player.sendMessage(ColorUtil.format(configManager.getMessage("recording-finished")
-                .replace("{name}", name)
-                .replace("{frames}", String.valueOf(frames.size()))));
-        
+
+        // Save to database
+        try {
+            databaseService.saveCutscene(cutscene);
+            player.sendMessage(ColorUtil.format(configManager.getMessage("recording-finished")
+                    .replace("{name}", name)
+                    .replace("{frames}", String.valueOf(frames.size()))));
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to save cutscene to database: " + name, e);
+            player.sendMessage(ColorUtil.format("&cFailed to save cutscene to database. Check console for details."));
+        }
+
         recordingSessions.remove(playerId);
         recordingTasks.remove(playerId);
         recordingFrameCounters.remove(playerId);
@@ -309,16 +371,26 @@ public class CutsceneManager {
                     .replace("{name}", name)));
             return;
         }
-        
-        File file = new File(cutsceneFolder, name + ".yml");
-        if (file.exists()) {
-            file.delete();
+
+        try {
+            // Delete from database
+            databaseService.deleteCutscene(name);
+
+            // Also delete file if it exists for backward compatibility
+            File file = new File(cutsceneFolder, name + ".yml");
+            if (file.exists()) {
+                file.delete();
+            }
+
+            cutscenes.remove(name.toLowerCase());
+
+            player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-deleted")
+                    .replace("{name}", name)));
+
+        } catch (Exception e) {
+            plugin.getLogger().log(Level.SEVERE, "Failed to delete cutscene from database: " + name, e);
+            player.sendMessage(ColorUtil.format("&cFailed to delete cutscene from database. Check console for details."));
         }
-        
-        cutscenes.remove(name.toLowerCase());
-        
-        player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-deleted")
-                .replace("{name}", name)));
     }
 
     public void listAllCutscenes(Player player) {
