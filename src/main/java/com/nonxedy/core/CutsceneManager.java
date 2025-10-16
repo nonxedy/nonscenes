@@ -27,6 +27,9 @@ import com.nonxedy.model.Cutscene;
 import com.nonxedy.model.CutsceneFrame;
 import com.nonxedy.util.ColorUtil;
 
+import net.kyori.adventure.text.Component;
+import net.kyori.adventure.text.minimessage.MiniMessage;
+
 public class CutsceneManager {
     private final Nonscenes plugin;
     private final ConfigManager configManager;
@@ -322,7 +325,7 @@ public class CutsceneManager {
         
         BukkitTask task = new BukkitRunnable() {
             int frameIndex = 0;
-            
+
             @Override
             public void run() {
                 if (frameIndex >= frames.size()) {
@@ -330,9 +333,17 @@ public class CutsceneManager {
                     cancel();
                     return;
                 }
-                
+
                 CutsceneFrame frame = frames.get(frameIndex);
                 player.teleport(frame.getLocation());
+
+                int currentFrame = frameIndex + 1;
+                int totalFrames = frames.size();
+                String progressText = "<gray>" + currentFrame + "<white>/<gray>" + totalFrames;
+
+                Component actionBar = MiniMessage.miniMessage().deserialize(progressText);
+                player.sendActionBar(actionBar);
+
                 frameIndex++;
             }
         }.runTaskTimer(plugin, 0L, delay);
