@@ -27,28 +27,24 @@ public class CutsceneDatabaseServiceFactory {
      */
     public static CutsceneDatabaseService createService(DatabaseType type, String config) throws DatabaseException {
         switch (type) {
-            case SQLITE:
+            case SQLITE -> {
                 if (config == null || config.trim().isEmpty()) {
                     throw new DatabaseException("SQLite database file path is required");
                 }
                 File dbFile = new File(config.trim());
                 return new SQLiteCutsceneDatabaseService(dbFile);
+            }
 
-            case MYSQL:
-                // For now, throw exception as MySQL implementation is not ready
+            case MYSQL -> // For now, throw exception as MySQL implementation is not ready
                 throw new DatabaseException("MySQL service implementation is in progress. Please use SQLITE for now.");
 
-            case POSTGRESQL:
-                throw new DatabaseException("PostgreSQL service implementation is in progress. Please use SQLITE for now.");
+            case POSTGRESQL -> throw new DatabaseException("PostgreSQL service implementation is in progress. Please use SQLITE for now.");
 
-            case MONGODB:
-                throw new DatabaseException("MongoDB service implementation is in progress. Please use SQLITE for now.");
+            case MONGODB -> throw new DatabaseException("MongoDB service implementation is in progress. Please use SQLITE for now.");
 
-            case REDIS:
-                throw new DatabaseException("Redis service implementation is in progress. Please use SQLITE for now.");
+            case REDIS -> throw new DatabaseException("Redis service implementation is in progress. Please use SQLITE for now.");
 
-            default:
-                throw new DatabaseException("Unsupported database type: " + type);
+            default -> throw new DatabaseException("Unsupported database type: " + type);
         }
     }
 

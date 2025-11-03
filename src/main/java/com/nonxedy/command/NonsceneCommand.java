@@ -49,7 +49,7 @@ public class NonsceneCommand implements CommandExecutor, TabCompleter {
         String subCommand = args[0].toLowerCase();
 
         switch (subCommand) {
-            case "start":
+            case "start" -> {
                 if (!player.hasPermission("nonscene.start")) {
                     player.sendMessage(configManager.getMessage("no-permission"));
                     return true;
@@ -75,9 +75,9 @@ public class NonsceneCommand implements CommandExecutor, TabCompleter {
                 }
                 
                 cutsceneManager.startRecording(player, name, frames);
-                break;
+            }
                 
-            case "delete":
+            case "delete" -> {
                 if (!player.hasPermission("nonscene.delete")) {
                     player.sendMessage(configManager.getMessage("no-permission"));
                     return true;
@@ -89,18 +89,18 @@ public class NonsceneCommand implements CommandExecutor, TabCompleter {
                 }
                 
                 cutsceneManager.deleteCutscene(player, args[1]);
-                break;
+            }
                 
-            case "all":
+            case "all" -> {
                 if (!player.hasPermission("nonscene.list")) {
                     player.sendMessage(configManager.getMessage("no-permission"));
                     return true;
                 }
                 
                 cutsceneManager.listAllCutscenes(player);
-                break;
+            }
                 
-            case "play":
+            case "play" -> {
                 if (!player.hasPermission("nonscene.play")) {
                     player.sendMessage(configManager.getMessage("no-permission"));
                     return true;
@@ -112,9 +112,9 @@ public class NonsceneCommand implements CommandExecutor, TabCompleter {
                 }
                 
                 cutsceneManager.playCutscene(player, args[1]);
-                break;
+            }
                 
-            case "showpath":
+            case "showpath" -> {
                 if (!player.hasPermission("nonscene.showpath")) {
                     player.sendMessage(configManager.getMessage("no-permission"));
                     return true;
@@ -126,11 +126,9 @@ public class NonsceneCommand implements CommandExecutor, TabCompleter {
                 }
 
                 cutsceneManager.showCutscenePath(player, args[1]);
-                break;
+            }
 
-            default:
-                sendHelpMessage(player);
-                break;
+            default -> sendHelpMessage(player);
         }
         
         return true;

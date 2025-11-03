@@ -8,6 +8,7 @@ import java.sql.SQLException;
 import java.sql.Statement;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.logging.Level;
 
 import com.nonxedy.database.exception.DatabaseException;
 import com.nonxedy.model.Cutscene;
@@ -45,9 +46,9 @@ public class SQLiteCutsceneDatabaseService extends BaseCutsceneDatabaseService {
             this.dataSource = new HikariDataSource(config);
 
             createTables();
-            logger.info("SQLite database initialized at: " + databaseFile.getAbsolutePath());
+            logger.log(Level.INFO, "SQLite database initialized at: {0}", databaseFile.getAbsolutePath());
 
-        } catch (Exception e) {
+        } catch (SQLException e) {
             throw new DatabaseException("Failed to initialize SQLite database", e);
         }
     }
@@ -129,7 +130,7 @@ public class SQLiteCutsceneDatabaseService extends BaseCutsceneDatabaseService {
                 }
 
                 conn.commit();
-                logger.fine("Successfully saved cutscene: " + data.name);
+                logger.log(Level.FINE, "Successfully saved cutscene: {0}", data.name);
 
             } catch (SQLException e) {
                 conn.rollback();

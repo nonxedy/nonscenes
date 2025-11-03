@@ -1,6 +1,7 @@
 package com.nonxedy;
 
 import java.io.File;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.bukkit.command.PluginCommand;
@@ -57,7 +58,7 @@ public class Nonscenes extends JavaPlugin {
 
             LOGGER.info("nonscenes enabled with database support");
         } catch (DatabaseException e) {
-            LOGGER.severe("Failed to initialize database: " + e.getMessage());
+            LOGGER.log(Level.SEVERE, "Failed to initialize database: {0}", e.getMessage());
             LOGGER.severe("Plugin will be disabled");
             getServer().getPluginManager().disablePlugin(this);
         }
@@ -114,12 +115,12 @@ public class Nonscenes extends JavaPlugin {
                 CutsceneDatabaseServiceFactory.DatabaseType.valueOf(storageType);
             String configPath = getDatabaseConfigPath(type);
 
-            LOGGER.info("Initializing " + storageType + " database service...");
+            LOGGER.log(Level.INFO, "Initializing {0} database service...", storageType);
 
             return CutsceneDatabaseServiceFactory.createService(type, configPath);
 
         } catch (IllegalArgumentException e) {
-            LOGGER.warning("Unknown storage type: " + storageType + ". Falling back to SQLITE.");
+            LOGGER.log(Level.WARNING, "Unknown storage type: {0}. Falling back to SQLITE.", storageType);
             return CutsceneDatabaseServiceFactory.createSQLiteService(getDataFolder());
         }
     }
@@ -131,24 +132,30 @@ public class Nonscenes extends JavaPlugin {
      */
     private String getDatabaseConfigPath(CutsceneDatabaseServiceFactory.DatabaseType type) {
         switch (type) {
-            case SQLITE:
+            case SQLITE -> {
                 String sqlitePath = configManager.getConfig().getString("storage.sqlite.file-path", "cutscenes.db");
                 return new File(getDataFolder(), sqlitePath).getAbsolutePath();
+            }
 
-            case MYSQL:
+            case MYSQL -> {
                 return buildMySQLConnectionString();
+            }
 
-            case POSTGRESQL:
+            case POSTGRESQL -> {
                 return buildPostgreSQLConnectionString();
+            }
 
-            case MONGODB:
+            case MONGODB -> {
                 return buildMongoDBConnectionString();
+            }
 
-            case REDIS:
+            case REDIS -> {
                 return buildRedisConnectionString();
+            }
 
-            default:
+            default -> {
                 return "";
+            }
         }
     }
 
