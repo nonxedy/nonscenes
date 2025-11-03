@@ -105,6 +105,12 @@
 							<goal>shade</goal>
 						</goals>
 						<configuration>
+							<artifactSet>
+								<includes>
+									<include>com.zaxxer:HikariCP</include>
+									<include>org.xerial:sqlite-jdbc</include>
+								</includes>
+							</artifactSet>
 							<relocations>
 								<relocation>
 									<pattern>com.zaxxer.hikari</pattern>
@@ -115,6 +121,8 @@
 									<shadedPattern>com.nonxedy.shaded.sqlite</shadedPattern>
 								</relocation>
 							</relocations>
+							<createDependencyReducedPom>false</createDependencyReducedPom>
+							<shadedArtifactAttached>false</shadedArtifactAttached>
 						</configuration>
 					</execution>
 				</executions>
