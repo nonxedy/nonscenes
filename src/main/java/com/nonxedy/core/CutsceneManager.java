@@ -53,6 +53,14 @@ public class CutsceneManager {
             cutsceneFolder.mkdirs();
         }
 
+        // Cutscenes will be loaded later when worlds are available
+    }
+
+    /**
+     * Load all cutscenes from database and files.
+     * This should be called after worlds are loaded.
+     */
+    public void loadCutscenes() {
         loadAllCutscenes();
     }
 

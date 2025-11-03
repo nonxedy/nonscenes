@@ -12,6 +12,7 @@ import com.nonxedy.core.CutsceneManager;
 import com.nonxedy.database.exception.DatabaseException;
 import com.nonxedy.database.service.CutsceneDatabaseService;
 import com.nonxedy.database.service.CutsceneDatabaseServiceFactory;
+import com.nonxedy.listener.WorldLoadListener;
 
 /**
  * Main plugin class for Nonscenes
@@ -43,6 +44,16 @@ public class Nonscenes extends JavaPlugin {
                 command.setExecutor(nonsceneCommand);
                 command.setTabCompleter(nonsceneCommand);
             }
+
+            // Register world load listener to load cutscenes after worlds are available
+            getServer().getPluginManager().registerEvents(new WorldLoadListener(this), this);
+
+            // Fallback: load cutscenes after a delay in case no world load events fire
+            getServer().getScheduler().runTaskLater(this, () -> {
+                WorldLoadListener listener =
+                    new WorldLoadListener(this);
+                listener.loadCutscenesIfNeeded();
+            }, 100L); // 5 seconds delay
 
             LOGGER.info("nonscenes enabled with database support");
         } catch (DatabaseException e) {
