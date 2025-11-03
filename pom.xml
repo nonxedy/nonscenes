@@ -7,7 +7,7 @@
 
 	<groupId>com.nonxedy</groupId>
 	<artifactId>nonscenes</artifactId>
-	<version>02-a</version>
+	<version>03-a</version>
 	<packaging>jar</packaging>
 
 	<properties>
