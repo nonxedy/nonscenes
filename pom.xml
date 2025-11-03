@@ -7,7 +7,7 @@
 
 	<groupId>com.nonxedy</groupId>
 	<artifactId>nonscenes</artifactId>
-	<version>02-a</version>
+	<version>03-a</version>
 	<packaging>jar</packaging>
 
 	<properties>
@@ -93,6 +93,39 @@
 				<configuration>
 					<release>21</release>
 				</configuration>
+			</plugin>
+			<plugin>
+				<groupId>org.apache.maven.plugins</groupId>
+				<artifactId>maven-shade-plugin</artifactId>
+				<version>3.6.1</version>
+				<executions>
+					<execution>
+						<phase>package</phase>
+						<goals>
+							<goal>shade</goal>
+						</goals>
+						<configuration>
+							<artifactSet>
+								<includes>
+									<include>com.zaxxer:HikariCP</include>
+									<include>org.xerial:sqlite-jdbc</include>
+								</includes>
+							</artifactSet>
+							<relocations>
+								<relocation>
+									<pattern>com.zaxxer.hikari</pattern>
+									<shadedPattern>com.nonxedy.shaded.hikari</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>org.sqlite</pattern>
+									<shadedPattern>com.nonxedy.shaded.sqlite</shadedPattern>
+								</relocation>
+							</relocations>
+							<createDependencyReducedPom>false</createDependencyReducedPom>
+							<shadedArtifactAttached>false</shadedArtifactAttached>
+						</configuration>
+					</execution>
+				</executions>
 			</plugin>
 		</plugins>
 		<pluginManagement>
