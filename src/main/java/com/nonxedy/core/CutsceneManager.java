@@ -22,6 +22,7 @@ import org.bukkit.scheduler.BukkitTask;
 import org.bukkit.util.Vector;
 
 import com.nonxedy.Nonscenes;
+import com.nonxedy.database.exception.DatabaseException;
 import com.nonxedy.database.service.CutsceneDatabaseService;
 import com.nonxedy.model.Cutscene;
 import com.nonxedy.model.CutsceneFrame;
@@ -72,12 +73,12 @@ public class CutsceneManager {
                 cutscenes.put(cutscene.getName().toLowerCase(), cutscene);
             }
 
-            plugin.getLogger().info("Loaded " + cutscenes.size() + " cutscenes from database");
+            plugin.getLogger().log(Level.INFO, "Loaded {0} cutscenes from database", cutscenes.size());
 
             // Also try to load from files for backward compatibility
             loadCutscenesFromFiles();
 
-        } catch (Exception e) {
+        } catch (DatabaseException e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to load cutscenes from database", e);
             // Fallback to file loading
             loadCutscenesFromFiles();
@@ -132,8 +133,8 @@ public class CutsceneManager {
                     // Try to save to database for migration
                     try {
                         databaseService.saveCutscene(cutscene);
-                        plugin.getLogger().info("Migrated cutscene from file to database: " + name);
-                    } catch (Exception dbException) {
+                        plugin.getLogger().log(Level.INFO, "Migrated cutscene from file to database: {0}", name);
+                    } catch (DatabaseException dbException) {
                         plugin.getLogger().log(Level.WARNING, "Failed to migrate cutscene to database: " + name, dbException);
                     }
                 }
@@ -143,7 +144,7 @@ public class CutsceneManager {
         }
 
         if (fileCount > 0) {
-            plugin.getLogger().info("Loaded " + fileCount + " cutscenes from files");
+            plugin.getLogger().log(Level.INFO, "Loaded {0} cutscenes from files", fileCount);
         }
     }
 
@@ -200,7 +201,7 @@ public class CutsceneManager {
                         .replace("{name}", name)));
                 return;
             }
-        } catch (Exception e) {
+        } catch (DatabaseException e) {
             plugin.getLogger().log(Level.WARNING, "Failed to check if cutscene exists in database: " + name, e);
         }
         
@@ -275,7 +276,7 @@ public class CutsceneManager {
             player.sendMessage(ColorUtil.format(configManager.getMessage("recording-finished")
                     .replace("{name}", name)
                     .replace("{frames}", String.valueOf(frames.size()))));
-        } catch (Exception e) {
+        } catch (DatabaseException e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to save cutscene to database: " + name, e);
             player.sendMessage(ColorUtil.format("&cFailed to save cutscene to database. Check console for details."));
         }
@@ -406,7 +407,7 @@ public class CutsceneManager {
             player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-deleted")
                     .replace("{name}", name)));
 
-        } catch (Exception e) {
+        } catch (DatabaseException e) {
             plugin.getLogger().log(Level.SEVERE, "Failed to delete cutscene from database: " + name, e);
             player.sendMessage(ColorUtil.format("&cFailed to delete cutscene from database. Check console for details."));
         }

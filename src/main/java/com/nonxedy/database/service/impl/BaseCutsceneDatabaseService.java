@@ -3,6 +3,7 @@ package com.nonxedy.database.service.impl;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.logging.Level;
 import java.util.logging.Logger;
 
 import org.bukkit.Bukkit;
@@ -35,7 +36,7 @@ public abstract class BaseCutsceneDatabaseService implements CutsceneDatabaseSer
         }
 
         performSaveCutscene(cutscene);
-        logger.info("Saved cutscene: " + cutscene.getName() + " with " + cutscene.getFrames().size() + " frames");
+        logger.log(Level.INFO, "Saved cutscene: {0} with {1} frames", new Object[]{cutscene.getName(), cutscene.getFrames().size()});
     }
 
     @Override
@@ -60,8 +61,8 @@ public abstract class BaseCutsceneDatabaseService implements CutsceneDatabaseSer
         for (CutsceneData data : dataList) {
             try {
                 cutscenes.add(convertToCutscene(data));
-            } catch (Exception e) {
-                logger.warning("Failed to convert cutscene data for: " + data.name + ", " + e.getMessage());
+            } catch (DatabaseException e) {
+                logger.log(Level.WARNING, "Failed to convert cutscene data for: {0}, {1}", new Object[]{data.name, e.getMessage()});
             }
         }
 
@@ -79,7 +80,7 @@ public abstract class BaseCutsceneDatabaseService implements CutsceneDatabaseSer
         }
 
         performDeleteCutscene(name.trim().toLowerCase());
-        logger.info("Deleted cutscene: " + name);
+        logger.log(Level.INFO, "Deleted cutscene: {0}", name);
     }
 
     @Override
@@ -151,7 +152,7 @@ public abstract class BaseCutsceneDatabaseService implements CutsceneDatabaseSer
             }
 
             if (Bukkit.getWorld(frameData.world) == null) {
-                logger.warning("World not found: " + frameData.world + " for cutscene: " + data.name);
+                logger.log(Level.WARNING, "World not found: {0} for cutscene: {1}", new Object[]{frameData.world, data.name});
                 continue;
             }
 

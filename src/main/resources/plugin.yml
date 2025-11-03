@@ -1,8 +1,8 @@
 name: nonscenes
 author: nonxedy
 main: com.nonxedy.Nonscenes
-description: Plugin for creation cutscenes 1.20-1.21.4
-version: 01-a
+description: Plugin for creation cutscenes 1.20-1.21.10
+version: 02-a
 prefix: nonscenes
 api-version: 1.20
 load: STARTUP

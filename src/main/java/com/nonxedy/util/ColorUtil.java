@@ -1,13 +1,13 @@
 package com.nonxedy.util;
 
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.TextComponent;
 import net.kyori.adventure.text.format.TextColor;
 import net.kyori.adventure.text.serializer.legacy.LegacyComponentSerializer;
 import net.md_5.bungee.api.ChatColor;
-
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 public class ColorUtil {
     // Pattern for hex color codes in format &#RRGGBB or #RRGGBB
@@ -167,13 +167,27 @@ public class ColorUtil {
         
         float r, g, b;
         switch (h % 6) {
-            case 0: r = value; g = t; b = p; break;
-            case 1: r = q; g = value; b = p; break;
-            case 2: r = p; g = value; b = t; break;
-            case 3: r = p; g = q; b = value; break;
-            case 4: r = t; g = p; b = value; break;
-            case 5: r = value; g = p; b = q; break;
-            default: r = 0; g = 0; b = 0;
+            case 0 -> {
+                r = value; g = t; b = p;
+            }
+            case 1 -> {
+                r = q; g = value; b = p;
+            }
+            case 2 -> {
+                r = p; g = value; b = t;
+            }
+            case 3 -> {
+                r = p; g = q; b = value;
+            }
+            case 4 -> {
+                r = t; g = p; b = value;
+            }
+            case 5 -> {
+                r = value; g = p; b = q;
+            }
+            default -> {
+                r = 0; g = 0; b = 0;
+            }
         }
         
         return TextColor.color(
