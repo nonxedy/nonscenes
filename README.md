@@ -10,7 +10,6 @@ A cutscene plugin for Minecraft 1.20.x - 1.21.x servers.
 - Play back recorded cutscenes
 - Visualize cutscene paths with particles
 - Multiple database support (SQLite, MySQL, PostgreSQL, MongoDB, Redis)
-- Permission-based command system
 
 ## Installation
 
