@@ -13,6 +13,7 @@ import com.nonxedy.core.CutsceneManager;
 import com.nonxedy.database.exception.DatabaseException;
 import com.nonxedy.database.service.CutsceneDatabaseService;
 import com.nonxedy.database.service.CutsceneDatabaseServiceFactory;
+import com.nonxedy.listener.PlayerInputListener;
 import com.nonxedy.listener.WorldLoadListener;
 
 /**
@@ -48,6 +49,9 @@ public class Nonscenes extends JavaPlugin {
 
             // Register world load listener to load cutscenes after worlds are available
             getServer().getPluginManager().registerEvents(new WorldLoadListener(this), this);
+
+            // Register player input listener to disable input during cutscene playback
+            getServer().getPluginManager().registerEvents(new PlayerInputListener(this), this);
 
             // Fallback: load cutscenes after a delay in case no world load events fire
             getServer().getScheduler().runTaskLater(this, () -> {
