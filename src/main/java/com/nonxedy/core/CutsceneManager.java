@@ -231,11 +231,11 @@ public class CutsceneManager {
         List<CutsceneFrame> frames = new ArrayList<>();
         recordingSessions.put(playerId, name);
         recordingFrameCounters.put(playerId, 0);
-        
+
         player.sendMessage(ColorUtil.format(configManager.getMessage("recording-started")
                 .replace("{name}", name)));
-        
-        int framesPerSecond = configManager.getConfig().getInt("settings.frames-per-second", 20);
+
+        int framesPerSecond = getValidatedFramesPerSecond();
         long delay = Math.max(1, 20 / framesPerSecond);
         
         BukkitTask task = new BukkitRunnable() {
@@ -328,8 +328,8 @@ public class CutsceneManager {
         if (makeInvulnerable) {
             player.setInvulnerable(true);
         }
-        
-        int framesPerSecond = configManager.getConfig().getInt("settings.frames-per-second", 20);
+
+        int framesPerSecond = getValidatedFramesPerSecond();
         long delay = Math.max(1, 20 / framesPerSecond);
         
         BukkitTask task = new BukkitRunnable() {
@@ -383,6 +383,11 @@ public class CutsceneManager {
         
         playbackSessions.remove(playerId);
         playbackTasks.remove(playerId);
+    }
+
+    private int getValidatedFramesPerSecond() {
+        int fps = configManager.getConfig().getInt("settings.frames-per-second", 30);
+        return Math.max(1, Math.min(60, fps)); // Clamp between 1 and 60 FPS
     }
 
     public void deleteCutscene(Player player, String name) {

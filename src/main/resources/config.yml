@@ -1,8 +1,10 @@
 # nonscenes configuration
 
 settings:
-  # Maximum frames per second for recording (default: 100)
-  frames-per-second: 100
+  # Frames per second for recording and playback (default: 30)
+  # Higher values mean smoother cutscenes but more server load
+  # Recommended: 10-30 FPS for smooth playback
+  frames-per-second: 30
   
   # Countdown seconds before recording starts
   countdown-seconds: 3
