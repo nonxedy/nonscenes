@@ -344,7 +344,14 @@ public class CutsceneManager {
                 }
 
                 CutsceneFrame frame = frames.get(frameIndex);
-                player.teleport(frame.getLocation());
+                Location targetLocation = frame.getLocation();
+
+                // Ensure the target chunk is loaded before teleporting
+                if (!targetLocation.getWorld().isChunkLoaded(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4)) {
+                    targetLocation.getWorld().loadChunk(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4, true);
+                }
+
+                player.teleport(targetLocation);
 
                 int currentFrame = frameIndex + 1;
                 int totalFrames = frames.size();
@@ -376,6 +383,11 @@ public class CutsceneManager {
             player.setInvulnerable(false);
         }
         
+        // Ensure the original location chunk is loaded before teleporting back
+        if (!originalLocation.getWorld().isChunkLoaded(originalLocation.getBlockX() >> 4, originalLocation.getBlockZ() >> 4)) {
+            originalLocation.getWorld().loadChunk(originalLocation.getBlockX() >> 4, originalLocation.getBlockZ() >> 4, true);
+        }
+
         player.teleport(originalLocation);
         
         player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-playback-finished")
