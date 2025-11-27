@@ -19,4 +19,5 @@ com/nonxedy/util/ColorUtil.class
 com/nonxedy/database/service/CutsceneDatabaseService.class
 com/nonxedy/model/CutsceneFrame.class
 com/nonxedy/core/CutsceneManager$3.class
+com/nonxedy/listener/PlayerInputListener.class
 com/nonxedy/command/NonsceneCommand.class

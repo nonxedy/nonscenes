@@ -231,11 +231,11 @@ public class CutsceneManager {
         List<CutsceneFrame> frames = new ArrayList<>();
         recordingSessions.put(playerId, name);
         recordingFrameCounters.put(playerId, 0);
-        
+
         player.sendMessage(ColorUtil.format(configManager.getMessage("recording-started")
                 .replace("{name}", name)));
-        
-        int framesPerSecond = configManager.getConfig().getInt("settings.frames-per-second", 20);
+
+        int framesPerSecond = getValidatedFramesPerSecond();
         long delay = Math.max(1, 20 / framesPerSecond);
         
         BukkitTask task = new BukkitRunnable() {
@@ -328,8 +328,8 @@ public class CutsceneManager {
         if (makeInvulnerable) {
             player.setInvulnerable(true);
         }
-        
-        int framesPerSecond = configManager.getConfig().getInt("settings.frames-per-second", 20);
+
+        int framesPerSecond = getValidatedFramesPerSecond();
         long delay = Math.max(1, 20 / framesPerSecond);
         
         BukkitTask task = new BukkitRunnable() {
@@ -344,7 +344,14 @@ public class CutsceneManager {
                 }
 
                 CutsceneFrame frame = frames.get(frameIndex);
-                player.teleport(frame.getLocation());
+                Location targetLocation = frame.getLocation();
+
+                // Ensure the target chunk is loaded before teleporting
+                if (!targetLocation.getWorld().isChunkLoaded(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4)) {
+                    targetLocation.getWorld().loadChunk(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4, true);
+                }
+
+                player.teleport(targetLocation);
 
                 int currentFrame = frameIndex + 1;
                 int totalFrames = frames.size();
@@ -376,6 +383,11 @@ public class CutsceneManager {
             player.setInvulnerable(false);
         }
         
+        // Ensure the original location chunk is loaded before teleporting back
+        if (!originalLocation.getWorld().isChunkLoaded(originalLocation.getBlockX() >> 4, originalLocation.getBlockZ() >> 4)) {
+            originalLocation.getWorld().loadChunk(originalLocation.getBlockX() >> 4, originalLocation.getBlockZ() >> 4, true);
+        }
+
         player.teleport(originalLocation);
         
         player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-playback-finished")
@@ -383,6 +395,11 @@ public class CutsceneManager {
         
         playbackSessions.remove(playerId);
         playbackTasks.remove(playerId);
+    }
+
+    private int getValidatedFramesPerSecond() {
+        int fps = configManager.getConfig().getInt("settings.frames-per-second", 30);
+        return Math.max(1, Math.min(60, fps)); // Clamp between 1 and 60 FPS
     }
 
     public void deleteCutscene(Player player, String name) {

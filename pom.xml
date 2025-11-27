@@ -7,7 +7,7 @@
 
 	<groupId>com.nonxedy</groupId>
 	<artifactId>nonscenes</artifactId>
-	<version>03-a</version>
+	<version>04-a</version>
 	<packaging>jar</packaging>
 
 	<properties>
@@ -44,6 +44,11 @@
     		<groupId>net.kyori</groupId>
     		<artifactId>adventure-text-minimessage</artifactId>
     		<version>4.24.0</version>
+		</dependency>
+		<dependency>
+  			<groupId>org.apache.commons</groupId>
+  			<artifactId>commons-lang3</artifactId>
+  			<version>3.18.0</version>
 		</dependency>
 		
 		<!-- Database dependencies -->
