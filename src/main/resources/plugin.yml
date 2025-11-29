@@ -36,6 +36,9 @@ permissions:
   nonscene.showpath:
     description: Allows visualizing cutscene paths
     default: op
+  nonscene.stop:
+    description: Allows cancelling recording/playback
+    default: op
   nonscene.admin:
     description: Grants all nonscene permissions
     default: op
@@ -46,3 +49,4 @@ permissions:
       nonscene.list: true
       nonscene.play: true
       nonscene.showpath: true
+      nonscene.stop: true

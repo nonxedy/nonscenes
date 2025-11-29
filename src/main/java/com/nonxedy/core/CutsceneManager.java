@@ -593,27 +593,54 @@ public class CutsceneManager {
         return cutscenes.get(name.toLowerCase());
     }
     
+    public void cancelAllSessions(Player player) {
+        UUID playerId = player.getUniqueId();
+        boolean cancelledSomething = false;
+
+        // Cancel recording if active
+        if (recordingSessions.containsKey(playerId)) {
+            cancelRecording(player);
+            cancelledSomething = true;
+        }
+
+        // Cancel playback if active
+        if (playbackSessions.containsKey(playerId)) {
+            cancelPlayback(player);
+            cancelledSomething = true;
+        }
+
+        // Cancel path visualization if active
+        if (pathVisualizationTasks.containsKey(playerId)) {
+            cancelPathVisualization(player);
+            cancelledSomething = true;
+        }
+
+        if (!cancelledSomething) {
+            player.sendMessage(ColorUtil.format(configManager.getMessage("nothing-to-cancel")));
+        }
+    }
+
     public void cleanup() {
         for (BukkitTask task : recordingTasks.values()) {
             if (task != null) {
                 task.cancel();
             }
         }
-        
+
         for (BukkitTask task : playbackTasks.values()) {
             if (task != null) {
                 task.cancel();
             }
         }
-        
+
         for (BukkitTask task : pathVisualizationTasks.values()) {
             if (task != null) {
                 task.cancel();
             }
         }
-        
+
         saveAllCutscenes();
-        
+
         recordingSessions.clear();
         recordingTasks.clear();
         recordingFrameCounters.clear();

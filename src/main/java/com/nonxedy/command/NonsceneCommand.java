@@ -128,6 +128,15 @@ public class NonsceneCommand implements CommandExecutor, TabCompleter {
                 cutsceneManager.showCutscenePath(player, args[1]);
             }
 
+            case "stop" -> {
+                if (!player.hasPermission("nonscene.stop")) {
+                    player.sendMessage(configManager.getMessage("no-permission"));
+                    return true;
+                }
+
+                cutsceneManager.cancelAllSessions(player);
+            }
+
             default -> sendHelpMessage(player);
         }
         
@@ -158,6 +167,7 @@ public class NonsceneCommand implements CommandExecutor, TabCompleter {
             if (player.hasPermission("nonscene.list")) subCommands.add("all");
             if (player.hasPermission("nonscene.play")) subCommands.add("play");
             if (player.hasPermission("nonscene.showpath")) subCommands.add("showpath");
+            if (player.hasPermission("nonscene.stop")) subCommands.add("stop");
             
             return filterCompletions(subCommands, args[0]);
         } else if (args.length == 2) {

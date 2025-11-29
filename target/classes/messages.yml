@@ -42,10 +42,14 @@ showing-path: "${prefix}&#2ecc71Showing path for cutscene &#f39c12{name} &#2ecc7
 path-visualization-cancelled: "${prefix}&#e74c3cPath visualization cancelled."
 path-already-showing: "${prefix}&#e74c3cYou are already visualizing a cutscene path."
 
+# Stop command messages
+nothing-to-cancel: "${prefix}&#e74c3cYou have no active recording, playback, or path visualization to cancel."
+
 # Help messages
 help-messages:
   - "&8&m-----&r &#3498db&lNonScenes Commands &8&m-----"
   - "&#3498db/nonscene start <name> <frames> &7- Start recording a cutscene"
+  - "&#3498db/nonscene stop &7- Cancel recording/playback"
   - "&#3498db/nonscene delete <name> &7- Delete a cutscene"
   - "&#3498db/nonscene all &7- List all cutscenes"
   - "&#3498db/nonscene play <name> &7- Play a cutscene"

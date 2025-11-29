@@ -44,8 +44,12 @@ public class PlayerInputListener implements Listener {
     @EventHandler(priority = EventPriority.HIGH, ignoreCancelled = true)
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
         if (shouldDisableInput(event.getPlayer())) {
-            event.setCancelled(true);
-            event.getPlayer().sendMessage(ColorUtil.format(configManager.getMessage("command-disabled-during-cutscene")));
+            String command = event.getMessage().toLowerCase();
+            // Allow /nonscene stop command even during cutscene playback
+            if (!(command.startsWith("/nonscene stop") || command.startsWith("/ns stop"))) {
+                event.setCancelled(true);
+                event.getPlayer().sendMessage(ColorUtil.format(configManager.getMessage("command-disabled-during-cutscene")));
+            }
         }
     }
 
