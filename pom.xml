@@ -114,6 +114,10 @@
 								<includes>
 									<include>com.zaxxer:HikariCP</include>
 									<include>org.xerial:sqlite-jdbc</include>
+									<include>com.mysql:mysql-connector-j</include>
+									<include>org.postgresql:postgresql</include>
+									<include>org.mongodb:mongodb-driver-sync</include>
+									<include>redis.clients:jedis</include>
 								</includes>
 							</artifactSet>
 							<relocations>
@@ -124,6 +128,26 @@
 								<relocation>
 									<pattern>org.sqlite</pattern>
 									<shadedPattern>com.nonxedy.shaded.sqlite</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>com.mysql</pattern>
+									<shadedPattern>com.nonxedy.shaded.mysql</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>org.postgresql</pattern>
+									<shadedPattern>com.nonxedy.shaded.postgresql</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>com.mongodb</pattern>
+									<shadedPattern>com.nonxedy.shaded.mongodb</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>org.bson</pattern>
+									<shadedPattern>com.nonxedy.shaded.bson</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>redis.clients</pattern>
+									<shadedPattern>com.nonxedy.shaded.redis</shadedPattern>
 								</relocation>
 							</relocations>
 							<createDependencyReducedPom>false</createDependencyReducedPom>

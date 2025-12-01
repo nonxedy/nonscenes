@@ -6,6 +6,10 @@
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/CutsceneDatabaseService.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/CutsceneDatabaseServiceFactory.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/BaseCutsceneDatabaseService.java
+/run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/MongoDBCutsceneDatabaseService.java
+/run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/MySQLCutsceneDatabaseService.java
+/run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/PostgreSQLCutsceneDatabaseService.java
+/run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/RedisCutsceneDatabaseService.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/SQLiteCutsceneDatabaseService.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/listener/PlayerInputListener.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/listener/WorldLoadListener.java
