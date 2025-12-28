@@ -330,37 +330,72 @@ public class CutsceneManager {
         }
 
         int framesPerSecond = getValidatedFramesPerSecond();
-        long delay = Math.max(1, 20 / framesPerSecond);
-        
+        final int interpolationSteps = Math.max(1, Math.min(100, configManager.getConfig().getInt("settings.playback.interpolation-steps", 10)));
+
+        // Adjust delay to maintain playback speed: more interpolation steps = faster ticks
+        long delay = Math.max(1, 20 / (framesPerSecond * interpolationSteps));
+
         BukkitTask task = new BukkitRunnable() {
-            int frameIndex = 0;
+            int currentFrameIndex = 0;
+            int currentInterpolationStep = 0;
 
             @Override
             public void run() {
-                if (frameIndex >= frames.size()) {
+                if (currentFrameIndex >= frames.size() - 1) {
+                    // Last frame - teleport directly
+                    CutsceneFrame lastFrame = frames.get(frames.size() - 1);
+                    Location lastLocation = lastFrame.getLocation();
+
+                    if (!lastLocation.getWorld().isChunkLoaded(lastLocation.getBlockX() >> 4, lastLocation.getBlockZ() >> 4)) {
+                        lastLocation.getWorld().loadChunk(lastLocation.getBlockX() >> 4, lastLocation.getBlockZ() >> 4, true);
+                    }
+
+                    player.teleport(lastLocation);
+
+                    String progressText = "<gray>" + frames.size() + "<white>/<gray>" + frames.size();
+                    Component actionBar = MiniMessage.miniMessage().deserialize(progressText);
+                    player.sendActionBar(actionBar);
+
                     finishPlayback(player, name, originalLocation, hidePlayer, makeInvulnerable);
                     cancel();
                     return;
                 }
 
-                CutsceneFrame frame = frames.get(frameIndex);
-                Location targetLocation = frame.getLocation();
+                // Get current and next frames for interpolation
+                CutsceneFrame currentFrame = frames.get(currentFrameIndex);
+                CutsceneFrame nextFrame = frames.get(currentFrameIndex + 1);
 
-                // Ensure the target chunk is loaded before teleporting
-                if (!targetLocation.getWorld().isChunkLoaded(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4)) {
-                    targetLocation.getWorld().loadChunk(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4, true);
+                Location currentLocation = currentFrame.getLocation();
+                Location nextLocation = nextFrame.getLocation();
+
+                // Ensure chunks are loaded
+                if (!currentLocation.getWorld().isChunkLoaded(currentLocation.getBlockX() >> 4, currentLocation.getBlockZ() >> 4)) {
+                    currentLocation.getWorld().loadChunk(currentLocation.getBlockX() >> 4, currentLocation.getBlockZ() >> 4, true);
+                }
+                if (!nextLocation.getWorld().isChunkLoaded(nextLocation.getBlockX() >> 4, nextLocation.getBlockZ() >> 4)) {
+                    nextLocation.getWorld().loadChunk(nextLocation.getBlockX() >> 4, nextLocation.getBlockZ() >> 4, true);
                 }
 
-                player.teleport(targetLocation);
+                // Interpolate between current and next frame
+                float t = (float) currentInterpolationStep / interpolationSteps;
+                Location interpolatedLocation = interpolateLocations(currentLocation, nextLocation, t);
 
-                int currentFrame = frameIndex + 1;
-                int totalFrames = frames.size();
-                String progressText = "<gray>" + currentFrame + "<white>/<gray>" + totalFrames;
+                player.teleport(interpolatedLocation);
 
+                // Update progress display (show frame numbers, not interpolation steps)
+                int displayFrame = currentFrameIndex + 1;
+                String progressText = "<gray>" + displayFrame + "<white>/<gray>" + frames.size();
                 Component actionBar = MiniMessage.miniMessage().deserialize(progressText);
                 player.sendActionBar(actionBar);
 
-                frameIndex++;
+                // Move to next interpolation step
+                currentInterpolationStep++;
+
+                // If all interpolation steps for this segment are done, move to next frame
+                if (currentInterpolationStep >= interpolationSteps) {
+                    currentFrameIndex++;
+                    currentInterpolationStep = 0;
+                }
             }
         }.runTaskTimer(plugin, 0L, delay);
         
@@ -618,6 +653,40 @@ public class CutsceneManager {
         if (!cancelledSomething) {
             player.sendMessage(ColorUtil.format(configManager.getMessage("nothing-to-cancel")));
         }
+    }
+
+    /**
+     * Interpolates between two locations
+     * @param from Starting location
+     * @param to Ending location
+     * @param t Interpolation factor (0.0 to 1.0)
+     * @return Interpolated location
+     */
+    private Location interpolateLocations(Location from, Location to, float t) {
+        // Ensure both locations are in the same world
+        if (!from.getWorld().equals(to.getWorld())) {
+            return from; // Fallback to 'from' location
+        }
+
+        // Linear interpolation for coordinates
+        double x = from.getX() + (to.getX() - from.getX()) * t;
+        double y = from.getY() + (to.getY() - from.getY()) * t;
+        double z = from.getZ() + (to.getZ() - from.getZ()) * t;
+
+        // Interpolate yaw and pitch with proper angle wrapping
+        float yawDiff = to.getYaw() - from.getYaw();
+        // Handle angle wrapping (e.g., 350° to 10° should go through 360°/0°)
+        if (yawDiff > 180) {
+            yawDiff -= 360;
+        } else if (yawDiff < -180) {
+            yawDiff += 360;
+        }
+        float yaw = from.getYaw() + yawDiff * t;
+
+        float pitchDiff = to.getPitch() - from.getPitch();
+        float pitch = from.getPitch() + pitchDiff * t;
+
+        return new Location(from.getWorld(), x, y, z, yaw, pitch);
     }
 
     public void cleanup() {
