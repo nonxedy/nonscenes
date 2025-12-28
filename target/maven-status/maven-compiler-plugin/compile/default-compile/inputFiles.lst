@@ -11,6 +11,7 @@
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/PostgreSQLCutsceneDatabaseService.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/RedisCutsceneDatabaseService.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/database/service/impl/SQLiteCutsceneDatabaseService.java
+/run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/listener/CutscenePacketListener.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/listener/PlayerInputListener.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/listener/WorldLoadListener.java
 /run/media/nonxedy/Disk/My files/nonscenes/src/main/java/com/nonxedy/model/Cutscene.java

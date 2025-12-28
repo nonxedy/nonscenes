@@ -7,12 +7,15 @@ import java.util.logging.Logger;
 import org.bukkit.command.PluginCommand;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import com.comphenix.protocol.ProtocolLibrary;
+import com.comphenix.protocol.ProtocolManager;
 import com.nonxedy.command.NonsceneCommand;
 import com.nonxedy.core.ConfigManager;
 import com.nonxedy.core.CutsceneManager;
 import com.nonxedy.database.exception.DatabaseException;
 import com.nonxedy.database.service.CutsceneDatabaseService;
 import com.nonxedy.database.service.CutsceneDatabaseServiceFactory;
+import com.nonxedy.listener.CutscenePacketListener;
 import com.nonxedy.listener.PlayerInputListener;
 import com.nonxedy.listener.WorldLoadListener;
 
@@ -24,6 +27,7 @@ public class Nonscenes extends JavaPlugin {
     private ConfigManager configManager;
     private CutsceneManager cutsceneManager;
     private CutsceneDatabaseService databaseService;
+    private ProtocolManager protocolManager;
 
     @Override
     public void onEnable() {
@@ -52,6 +56,17 @@ public class Nonscenes extends JavaPlugin {
 
             // Register player input listener to disable input during cutscene playback
             getServer().getPluginManager().registerEvents(new PlayerInputListener(this), this);
+
+            // Initialize ProtocolLib if available
+            if (getServer().getPluginManager().getPlugin("ProtocolLib") != null) {
+                protocolManager = ProtocolLibrary.getProtocolManager();
+                CutscenePacketListener packetListener = new CutscenePacketListener(this);
+                protocolManager.addPacketListener(packetListener);
+                cutsceneManager.setPacketListener(packetListener);
+                LOGGER.info("ProtocolLib support enabled");
+            } else {
+                LOGGER.warning("ProtocolLib not found. Camera and UI control features will be disabled.");
+            }
 
             // Fallback: load cutscenes after a delay in case no world load events fire
             getServer().getScheduler().runTaskLater(this, () -> {
@@ -104,6 +119,14 @@ public class Nonscenes extends JavaPlugin {
      */
     public CutsceneDatabaseService getDatabaseService() {
         return databaseService;
+    }
+
+    /**
+     * Gets the protocol manager
+     * @return The protocol manager, or null if ProtocolLib is not available
+     */
+    public ProtocolManager getProtocolManager() {
+        return protocolManager;
     }
 
     /**

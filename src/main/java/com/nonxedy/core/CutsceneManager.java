@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.configuration.ConfigurationSection;
@@ -24,9 +25,13 @@ import org.bukkit.util.Vector;
 import com.nonxedy.Nonscenes;
 import com.nonxedy.database.exception.DatabaseException;
 import com.nonxedy.database.service.CutsceneDatabaseService;
+import com.nonxedy.listener.CutscenePacketListener;
 import com.nonxedy.model.Cutscene;
 import com.nonxedy.model.CutsceneFrame;
 import com.nonxedy.util.ColorUtil;
+
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -42,7 +47,10 @@ public class CutsceneManager {
     private final Map<UUID, String> playbackSessions = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> playbackTasks = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> pathVisualizationTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, ItemStack[]> savedInventories = new ConcurrentHashMap<>();
+    private final Map<UUID, GameMode> savedGameModes = new ConcurrentHashMap<>();
     private final File cutsceneFolder;
+    private CutscenePacketListener packetListener;
 
     public CutsceneManager(Nonscenes plugin) {
         this.plugin = plugin;
@@ -55,6 +63,10 @@ public class CutsceneManager {
         }
 
         // Cutscenes will be loaded later when worlds are available
+    }
+
+    public void setPacketListener(CutscenePacketListener packetListener) {
+        this.packetListener = packetListener;
     }
 
     /**
@@ -311,7 +323,18 @@ public class CutsceneManager {
         playbackSessions.put(playerId, name);
         player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-playing")
                 .replace("{name}", name)));
-        
+
+        // Save player's game mode and set to spectator to hide UI
+        GameMode originalGameMode = player.getGameMode();
+        savedGameModes.put(playerId, originalGameMode);
+        player.setGameMode(GameMode.SPECTATOR);
+
+        // Setup packet listener for camera control
+        if (packetListener != null) {
+            packetListener.addPlayer(player);
+            packetListener.forceFirstPerson(player);
+        }
+
         Location originalLocation = player.getLocation().clone();
         
         boolean hidePlayer = configManager.getConfig().getBoolean("settings.playback.hide-player", true);
@@ -382,6 +405,11 @@ public class CutsceneManager {
 
                 player.teleport(interpolatedLocation);
 
+                // Force first person camera every frame
+                if (packetListener != null) {
+                    packetListener.forceFirstPerson(player);
+                }
+
                 // Update progress display (show frame numbers, not interpolation steps)
                 int displayFrame = currentFrameIndex + 1;
                 String progressText = "<gray>" + displayFrame + "<white>/<gray>" + frames.size();
@@ -402,10 +430,10 @@ public class CutsceneManager {
         playbackTasks.put(playerId, task);
     }
 
-    private void finishPlayback(Player player, String name, Location originalLocation, 
+    private void finishPlayback(Player player, String name, Location originalLocation,
                                boolean wasHidden, boolean wasInvulnerable) {
         UUID playerId = player.getUniqueId();
-        
+
         if (wasHidden) {
             for (Player otherPlayer : Bukkit.getOnlinePlayers()) {
                 if (!otherPlayer.equals(player)) {
@@ -413,21 +441,32 @@ public class CutsceneManager {
                 }
             }
         }
-        
+
         if (wasInvulnerable) {
             player.setInvulnerable(false);
         }
-        
+
+        // Restore player's game mode
+        GameMode savedGameMode = savedGameModes.remove(playerId);
+        if (savedGameMode != null) {
+            player.setGameMode(savedGameMode);
+        }
+
+        // Remove from packet listener
+        if (packetListener != null) {
+            packetListener.removePlayer(player);
+        }
+
         // Ensure the original location chunk is loaded before teleporting back
         if (!originalLocation.getWorld().isChunkLoaded(originalLocation.getBlockX() >> 4, originalLocation.getBlockZ() >> 4)) {
             originalLocation.getWorld().loadChunk(originalLocation.getBlockX() >> 4, originalLocation.getBlockZ() >> 4, true);
         }
 
         player.teleport(originalLocation);
-        
+
         player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-playback-finished")
                 .replace("{name}", name)));
-        
+
         playbackSessions.remove(playerId);
         playbackTasks.remove(playerId);
     }
@@ -575,28 +614,39 @@ public class CutsceneManager {
     
     public void cancelPlayback(Player player) {
         UUID playerId = player.getUniqueId();
-        
+
         if (!playbackSessions.containsKey(playerId)) {
             return;
         }
-        
+
         String cutsceneName = playbackSessions.get(playerId);
-        
+
         BukkitTask task = playbackTasks.get(playerId);
         if (task != null) {
             task.cancel();
         }
-        
+
         player.setInvulnerable(false);
         for (Player otherPlayer : Bukkit.getOnlinePlayers()) {
             if (!otherPlayer.equals(player)) {
                 otherPlayer.showPlayer(plugin, player);
             }
         }
-        
+
+        // Restore player's game mode
+        GameMode savedGameMode = savedGameModes.remove(playerId);
+        if (savedGameMode != null) {
+            player.setGameMode(savedGameMode);
+        }
+
+        // Remove from packet listener
+        if (packetListener != null) {
+            packetListener.removePlayer(player);
+        }
+
         playbackSessions.remove(playerId);
         playbackTasks.remove(playerId);
-        
+
         player.sendMessage(ColorUtil.format(configManager.getMessage("playback-cancelled")
                 .replace("{name}", cutsceneName)));
     }
@@ -716,5 +766,7 @@ public class CutsceneManager {
         playbackSessions.clear();
         playbackTasks.clear();
         pathVisualizationTasks.clear();
+        savedInventories.clear();
+        savedGameModes.clear();
     }
 }
