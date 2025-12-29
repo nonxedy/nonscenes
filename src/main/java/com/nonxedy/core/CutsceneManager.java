@@ -11,6 +11,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.logging.Level;
 
 import org.bukkit.Bukkit;
+import org.bukkit.GameMode;
 import org.bukkit.Location;
 import org.bukkit.Particle;
 import org.bukkit.configuration.ConfigurationSection;
@@ -24,9 +25,13 @@ import org.bukkit.util.Vector;
 import com.nonxedy.Nonscenes;
 import com.nonxedy.database.exception.DatabaseException;
 import com.nonxedy.database.service.CutsceneDatabaseService;
+import com.nonxedy.listener.CutscenePacketListener;
 import com.nonxedy.model.Cutscene;
 import com.nonxedy.model.CutsceneFrame;
 import com.nonxedy.util.ColorUtil;
+
+import org.bukkit.inventory.ItemStack;
+import org.bukkit.inventory.PlayerInventory;
 
 import net.kyori.adventure.text.Component;
 import net.kyori.adventure.text.minimessage.MiniMessage;
@@ -42,7 +47,10 @@ public class CutsceneManager {
     private final Map<UUID, String> playbackSessions = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> playbackTasks = new ConcurrentHashMap<>();
     private final Map<UUID, BukkitTask> pathVisualizationTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, ItemStack[]> savedInventories = new ConcurrentHashMap<>();
+    private final Map<UUID, GameMode> savedGameModes = new ConcurrentHashMap<>();
     private final File cutsceneFolder;
+    private CutscenePacketListener packetListener;
 
     public CutsceneManager(Nonscenes plugin) {
         this.plugin = plugin;
@@ -55,6 +63,10 @@ public class CutsceneManager {
         }
 
         // Cutscenes will be loaded later when worlds are available
+    }
+
+    public void setPacketListener(CutscenePacketListener packetListener) {
+        this.packetListener = packetListener;
     }
 
     /**
@@ -311,7 +323,18 @@ public class CutsceneManager {
         playbackSessions.put(playerId, name);
         player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-playing")
                 .replace("{name}", name)));
-        
+
+        // Save player's game mode and set to spectator to hide UI
+        GameMode originalGameMode = player.getGameMode();
+        savedGameModes.put(playerId, originalGameMode);
+        player.setGameMode(GameMode.SPECTATOR);
+
+        // Setup packet listener for camera control
+        if (packetListener != null) {
+            packetListener.addPlayer(player);
+            packetListener.forceFirstPerson(player);
+        }
+
         Location originalLocation = player.getLocation().clone();
         
         boolean hidePlayer = configManager.getConfig().getBoolean("settings.playback.hide-player", true);
@@ -330,47 +353,87 @@ public class CutsceneManager {
         }
 
         int framesPerSecond = getValidatedFramesPerSecond();
-        long delay = Math.max(1, 20 / framesPerSecond);
-        
+        final int interpolationSteps = Math.max(1, Math.min(100, configManager.getConfig().getInt("settings.playback.interpolation-steps", 10)));
+
+        // Adjust delay to maintain playback speed: more interpolation steps = faster ticks
+        long delay = Math.max(1, 20 / (framesPerSecond * interpolationSteps));
+
         BukkitTask task = new BukkitRunnable() {
-            int frameIndex = 0;
+            int currentFrameIndex = 0;
+            int currentInterpolationStep = 0;
 
             @Override
             public void run() {
-                if (frameIndex >= frames.size()) {
+                if (currentFrameIndex >= frames.size() - 1) {
+                    // Last frame - teleport directly
+                    CutsceneFrame lastFrame = frames.get(frames.size() - 1);
+                    Location lastLocation = lastFrame.getLocation();
+
+                    if (!lastLocation.getWorld().isChunkLoaded(lastLocation.getBlockX() >> 4, lastLocation.getBlockZ() >> 4)) {
+                        lastLocation.getWorld().loadChunk(lastLocation.getBlockX() >> 4, lastLocation.getBlockZ() >> 4, true);
+                    }
+
+                    player.teleport(lastLocation);
+
+                    String progressText = "<gray>" + frames.size() + "<white>/<gray>" + frames.size();
+                    Component actionBar = MiniMessage.miniMessage().deserialize(progressText);
+                    player.sendActionBar(actionBar);
+
                     finishPlayback(player, name, originalLocation, hidePlayer, makeInvulnerable);
                     cancel();
                     return;
                 }
 
-                CutsceneFrame frame = frames.get(frameIndex);
-                Location targetLocation = frame.getLocation();
+                // Get current and next frames for interpolation
+                CutsceneFrame currentFrame = frames.get(currentFrameIndex);
+                CutsceneFrame nextFrame = frames.get(currentFrameIndex + 1);
 
-                // Ensure the target chunk is loaded before teleporting
-                if (!targetLocation.getWorld().isChunkLoaded(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4)) {
-                    targetLocation.getWorld().loadChunk(targetLocation.getBlockX() >> 4, targetLocation.getBlockZ() >> 4, true);
+                Location currentLocation = currentFrame.getLocation();
+                Location nextLocation = nextFrame.getLocation();
+
+                // Ensure chunks are loaded
+                if (!currentLocation.getWorld().isChunkLoaded(currentLocation.getBlockX() >> 4, currentLocation.getBlockZ() >> 4)) {
+                    currentLocation.getWorld().loadChunk(currentLocation.getBlockX() >> 4, currentLocation.getBlockZ() >> 4, true);
+                }
+                if (!nextLocation.getWorld().isChunkLoaded(nextLocation.getBlockX() >> 4, nextLocation.getBlockZ() >> 4)) {
+                    nextLocation.getWorld().loadChunk(nextLocation.getBlockX() >> 4, nextLocation.getBlockZ() >> 4, true);
                 }
 
-                player.teleport(targetLocation);
+                // Interpolate between current and next frame
+                float t = (float) currentInterpolationStep / interpolationSteps;
+                Location interpolatedLocation = interpolateLocations(currentLocation, nextLocation, t);
 
-                int currentFrame = frameIndex + 1;
-                int totalFrames = frames.size();
-                String progressText = "<gray>" + currentFrame + "<white>/<gray>" + totalFrames;
+                player.teleport(interpolatedLocation);
 
+                // Force first person camera every frame
+                if (packetListener != null) {
+                    packetListener.forceFirstPerson(player);
+                }
+
+                // Update progress display (show frame numbers, not interpolation steps)
+                int displayFrame = currentFrameIndex + 1;
+                String progressText = "<gray>" + displayFrame + "<white>/<gray>" + frames.size();
                 Component actionBar = MiniMessage.miniMessage().deserialize(progressText);
                 player.sendActionBar(actionBar);
 
-                frameIndex++;
+                // Move to next interpolation step
+                currentInterpolationStep++;
+
+                // If all interpolation steps for this segment are done, move to next frame
+                if (currentInterpolationStep >= interpolationSteps) {
+                    currentFrameIndex++;
+                    currentInterpolationStep = 0;
+                }
             }
         }.runTaskTimer(plugin, 0L, delay);
         
         playbackTasks.put(playerId, task);
     }
 
-    private void finishPlayback(Player player, String name, Location originalLocation, 
+    private void finishPlayback(Player player, String name, Location originalLocation,
                                boolean wasHidden, boolean wasInvulnerable) {
         UUID playerId = player.getUniqueId();
-        
+
         if (wasHidden) {
             for (Player otherPlayer : Bukkit.getOnlinePlayers()) {
                 if (!otherPlayer.equals(player)) {
@@ -378,21 +441,32 @@ public class CutsceneManager {
                 }
             }
         }
-        
+
         if (wasInvulnerable) {
             player.setInvulnerable(false);
         }
-        
+
+        // Restore player's game mode
+        GameMode savedGameMode = savedGameModes.remove(playerId);
+        if (savedGameMode != null) {
+            player.setGameMode(savedGameMode);
+        }
+
+        // Remove from packet listener
+        if (packetListener != null) {
+            packetListener.removePlayer(player);
+        }
+
         // Ensure the original location chunk is loaded before teleporting back
         if (!originalLocation.getWorld().isChunkLoaded(originalLocation.getBlockX() >> 4, originalLocation.getBlockZ() >> 4)) {
             originalLocation.getWorld().loadChunk(originalLocation.getBlockX() >> 4, originalLocation.getBlockZ() >> 4, true);
         }
 
         player.teleport(originalLocation);
-        
+
         player.sendMessage(ColorUtil.format(configManager.getMessage("cutscene-playback-finished")
                 .replace("{name}", name)));
-        
+
         playbackSessions.remove(playerId);
         playbackTasks.remove(playerId);
     }
@@ -540,28 +614,39 @@ public class CutsceneManager {
     
     public void cancelPlayback(Player player) {
         UUID playerId = player.getUniqueId();
-        
+
         if (!playbackSessions.containsKey(playerId)) {
             return;
         }
-        
+
         String cutsceneName = playbackSessions.get(playerId);
-        
+
         BukkitTask task = playbackTasks.get(playerId);
         if (task != null) {
             task.cancel();
         }
-        
+
         player.setInvulnerable(false);
         for (Player otherPlayer : Bukkit.getOnlinePlayers()) {
             if (!otherPlayer.equals(player)) {
                 otherPlayer.showPlayer(plugin, player);
             }
         }
-        
+
+        // Restore player's game mode
+        GameMode savedGameMode = savedGameModes.remove(playerId);
+        if (savedGameMode != null) {
+            player.setGameMode(savedGameMode);
+        }
+
+        // Remove from packet listener
+        if (packetListener != null) {
+            packetListener.removePlayer(player);
+        }
+
         playbackSessions.remove(playerId);
         playbackTasks.remove(playerId);
-        
+
         player.sendMessage(ColorUtil.format(configManager.getMessage("playback-cancelled")
                 .replace("{name}", cutsceneName)));
     }
@@ -593,32 +678,95 @@ public class CutsceneManager {
         return cutscenes.get(name.toLowerCase());
     }
     
+    public void cancelAllSessions(Player player) {
+        UUID playerId = player.getUniqueId();
+        boolean cancelledSomething = false;
+
+        // Cancel recording if active
+        if (recordingSessions.containsKey(playerId)) {
+            cancelRecording(player);
+            cancelledSomething = true;
+        }
+
+        // Cancel playback if active
+        if (playbackSessions.containsKey(playerId)) {
+            cancelPlayback(player);
+            cancelledSomething = true;
+        }
+
+        // Cancel path visualization if active
+        if (pathVisualizationTasks.containsKey(playerId)) {
+            cancelPathVisualization(player);
+            cancelledSomething = true;
+        }
+
+        if (!cancelledSomething) {
+            player.sendMessage(ColorUtil.format(configManager.getMessage("nothing-to-cancel")));
+        }
+    }
+
+    /**
+     * Interpolates between two locations
+     * @param from Starting location
+     * @param to Ending location
+     * @param t Interpolation factor (0.0 to 1.0)
+     * @return Interpolated location
+     */
+    private Location interpolateLocations(Location from, Location to, float t) {
+        // Ensure both locations are in the same world
+        if (!from.getWorld().equals(to.getWorld())) {
+            return from; // Fallback to 'from' location
+        }
+
+        // Linear interpolation for coordinates
+        double x = from.getX() + (to.getX() - from.getX()) * t;
+        double y = from.getY() + (to.getY() - from.getY()) * t;
+        double z = from.getZ() + (to.getZ() - from.getZ()) * t;
+
+        // Interpolate yaw and pitch with proper angle wrapping
+        float yawDiff = to.getYaw() - from.getYaw();
+        // Handle angle wrapping (e.g., 350° to 10° should go through 360°/0°)
+        if (yawDiff > 180) {
+            yawDiff -= 360;
+        } else if (yawDiff < -180) {
+            yawDiff += 360;
+        }
+        float yaw = from.getYaw() + yawDiff * t;
+
+        float pitchDiff = to.getPitch() - from.getPitch();
+        float pitch = from.getPitch() + pitchDiff * t;
+
+        return new Location(from.getWorld(), x, y, z, yaw, pitch);
+    }
+
     public void cleanup() {
         for (BukkitTask task : recordingTasks.values()) {
             if (task != null) {
                 task.cancel();
             }
         }
-        
+
         for (BukkitTask task : playbackTasks.values()) {
             if (task != null) {
                 task.cancel();
             }
         }
-        
+
         for (BukkitTask task : pathVisualizationTasks.values()) {
             if (task != null) {
                 task.cancel();
             }
         }
-        
+
         saveAllCutscenes();
-        
+
         recordingSessions.clear();
         recordingTasks.clear();
         recordingFrameCounters.clear();
         playbackSessions.clear();
         playbackTasks.clear();
         pathVisualizationTasks.clear();
+        savedInventories.clear();
+        savedGameModes.clear();
     }
 }

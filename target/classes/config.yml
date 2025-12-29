@@ -26,6 +26,9 @@ settings:
     invulnerable: true
     # Whether to disable player input during cutscene playback
     disable-input: true
+    # Number of interpolation steps between frames (higher = smoother, but more CPU)
+    # Recommended: 5-20 for smooth playback
+    interpolation-steps: 10
     
 storage:
   # Storage type: SQLITE, MYSQL, POSTGRESQL, MONGODB, REDIS

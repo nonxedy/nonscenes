@@ -2,13 +2,14 @@ name: nonscenes
 author: nonxedy
 main: com.nonxedy.Nonscenes
 description: Plugin for creation cutscenes 1.20-1.21.10
-version: 04-a
+version: 05-a
 prefix: nonscenes
 api-version: 1.20
 load: STARTUP
 
 depend: 
   - LuckPerms
+  - ProtocolLib
 
 commands:
   nonscene:
@@ -36,6 +37,9 @@ permissions:
   nonscene.showpath:
     description: Allows visualizing cutscene paths
     default: op
+  nonscene.stop:
+    description: Allows cancelling recording/playback
+    default: op
   nonscene.admin:
     description: Grants all nonscene permissions
     default: op
@@ -46,3 +50,4 @@ permissions:
       nonscene.list: true
       nonscene.play: true
       nonscene.showpath: true
+      nonscene.stop: true

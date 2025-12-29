@@ -7,7 +7,7 @@
 
 	<groupId>com.nonxedy</groupId>
 	<artifactId>nonscenes</artifactId>
-	<version>04-a</version>
+	<version>05-a</version>
 	<packaging>jar</packaging>
 
 	<properties>
@@ -49,6 +49,12 @@
   			<groupId>org.apache.commons</groupId>
   			<artifactId>commons-lang3</artifactId>
   			<version>3.18.0</version>
+		</dependency>
+		<dependency>
+			<groupId>net.dmulloy2</groupId>
+			<artifactId>ProtocolLib</artifactId>
+			<version>5.4.0</version>
+			<scope>provided</scope>
 		</dependency>
 		
 		<!-- Database dependencies -->
@@ -114,6 +120,10 @@
 								<includes>
 									<include>com.zaxxer:HikariCP</include>
 									<include>org.xerial:sqlite-jdbc</include>
+									<include>com.mysql:mysql-connector-j</include>
+									<include>org.postgresql:postgresql</include>
+									<include>org.mongodb:mongodb-driver-sync</include>
+									<include>redis.clients:jedis</include>
 								</includes>
 							</artifactSet>
 							<relocations>
@@ -124,6 +134,26 @@
 								<relocation>
 									<pattern>org.sqlite</pattern>
 									<shadedPattern>com.nonxedy.shaded.sqlite</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>com.mysql</pattern>
+									<shadedPattern>com.nonxedy.shaded.mysql</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>org.postgresql</pattern>
+									<shadedPattern>com.nonxedy.shaded.postgresql</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>com.mongodb</pattern>
+									<shadedPattern>com.nonxedy.shaded.mongodb</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>org.bson</pattern>
+									<shadedPattern>com.nonxedy.shaded.bson</shadedPattern>
+								</relocation>
+								<relocation>
+									<pattern>redis.clients</pattern>
+									<shadedPattern>com.nonxedy.shaded.redis</shadedPattern>
 								</relocation>
 							</relocations>
 							<createDependencyReducedPom>false</createDependencyReducedPom>
