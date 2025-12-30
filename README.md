@@ -2,7 +2,7 @@
 
 A cutscene plugin for Minecraft 1.20.x - 1.21.x servers.
 
-> **Note**: This plugin is currently in alpha development stage but is actively maintained and improved.
+> **Note**: This plugin has been written on Kottlin. It is currently in alpha development stage but is actively maintained and improved.
 
 ## Features
 
@@ -17,6 +17,38 @@ A cutscene plugin for Minecraft 1.20.x - 1.21.x servers.
 2. Place in your server's `plugins/` folder
 3. Install LuckPerms (required for permissions)
 4. Restart your server
+
+## Building from Source
+
+This project uses Gradle with Kotlin DSL. To build the plugin:
+
+### Prerequisites
+- Java 21 or higher
+- Gradle 8.5+ (or use the included wrapper)
+
+### Build Commands
+```bash
+# Clone the repository
+git clone https://github.com/nonxedy/nonscenes.git
+cd nonscenes
+
+# Build the plugin
+./gradlew build
+
+# The JAR file will be created in build/libs/
+```
+
+### Development
+```bash
+# Run tests
+./gradlew test
+
+# Clean build
+./gradlew clean build
+
+# Generate IDE files (for IntelliJ IDEA)
+./gradlew idea
+```
 
 ## Commands
 
