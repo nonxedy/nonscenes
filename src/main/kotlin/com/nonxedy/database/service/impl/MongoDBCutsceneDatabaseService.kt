@@ -53,17 +53,17 @@ class MongoDBCutsceneDatabaseService(
             val collection = db.getCollection("cutscenes")
 
             // Delete existing cutscene
-            collection.deleteOne(Document("name", cutscene.getName()))
+            collection.deleteOne(Document("name", cutscene.name))
 
             // Create document
             val cutsceneDoc = Document()
-                .append("name", cutscene.getName())
-                .append("frameCount", cutscene.getFrames().size)
+                .append("name", cutscene.name)
+                .append("frameCount", cutscene.frames.size)
 
             // Add frames
             val framesArray = mutableListOf<Document>()
-            cutscene.getFrames().forEachIndexed { index, frame ->
-                val location = frame.getLocation()
+            cutscene.frames.forEachIndexed { index, frame ->
+                val location = frame.location
                 val frameDoc = Document()
                     .append("frameIndex", index)
                     .append("world", location.world?.name ?: "world")
@@ -80,7 +80,7 @@ class MongoDBCutsceneDatabaseService(
 
         } catch (e: Exception) {
             logger.severe("Failed to save cutscene: ${e.message}")
-            throw RuntimeException("Failed to save cutscene: ${cutscene.getName()}", e)
+            throw RuntimeException("Failed to save cutscene: ${cutscene.name}", e)
         }
     }
 

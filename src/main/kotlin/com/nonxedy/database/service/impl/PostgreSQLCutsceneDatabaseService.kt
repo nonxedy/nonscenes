@@ -53,12 +53,12 @@ class PostgreSQLCutsceneDatabaseService(
 
             // Delete existing cutscene
             val deleteStmt = conn.prepareStatement("DELETE FROM cutscenes WHERE name = ?")
-            deleteStmt.setString(1, cutscene.getName())
+            deleteStmt.setString(1, cutscene.name)
             deleteStmt.executeUpdate()
             deleteStmt.close()
 
             val deleteFramesStmt = conn.prepareStatement("DELETE FROM cutscene_frames WHERE cutscene_name = ?")
-            deleteFramesStmt.setString(1, cutscene.getName())
+            deleteFramesStmt.setString(1, cutscene.name)
             deleteFramesStmt.executeUpdate()
             deleteFramesStmt.close()
 
@@ -66,8 +66,8 @@ class PostgreSQLCutsceneDatabaseService(
             val insertStmt = conn.prepareStatement(
                 "INSERT INTO cutscenes (name, frame_count) VALUES (?, ?)"
             )
-            insertStmt.setString(1, cutscene.getName())
-            insertStmt.setInt(2, cutscene.getFrames().size)
+            insertStmt.setString(1, cutscene.name)
+            insertStmt.setInt(2, cutscene.frames.size)
             insertStmt.executeUpdate()
             insertStmt.close()
 
@@ -77,9 +77,9 @@ class PostgreSQLCutsceneDatabaseService(
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             """)
 
-            cutscene.getFrames().forEachIndexed { index, frame ->
-                val location = frame.getLocation()
-                frameStmt.setString(1, cutscene.getName())
+            cutscene.frames.forEachIndexed { index, frame ->
+                val location = frame.location
+                frameStmt.setString(1, cutscene.name)
                 frameStmt.setInt(2, index)
                 frameStmt.setString(3, location.world?.name ?: "world")
                 frameStmt.setDouble(4, location.x)
@@ -96,7 +96,7 @@ class PostgreSQLCutsceneDatabaseService(
         } catch (e: Exception) {
             conn.rollback()
             logger.severe("Failed to save cutscene: ${e.message}")
-            throw RuntimeException("Failed to save cutscene: ${cutscene.getName()}", e)
+            throw RuntimeException("Failed to save cutscene: ${cutscene.name}", e)
         } finally {
             conn.autoCommit = true
         }
@@ -121,7 +121,7 @@ class PostgreSQLCutsceneDatabaseService(
             while (rs.next()) {
                 val name = rs.getString("name")
 
-                if (currentCutscene == null || currentCutscene.getName() != name) {
+                if (currentCutscene == null || currentCutscene.name != name) {
                     // Save previous cutscene
                     if (currentCutscene != null && currentFrames.isNotEmpty()) {
                         cutscenes.add(currentCutscene)

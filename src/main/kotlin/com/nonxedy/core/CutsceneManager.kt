@@ -58,12 +58,12 @@ class CutsceneManager(private val plugin: Nonscenes) {
         }
     }
 
-    // Load cutscenes from files
+    // Load cutscenes from database
     private fun loadCutscenesFromDatabase() {
         try {
             val loadedCutscenes = databaseService.loadAllCutscenes()
             for (cutscene in loadedCutscenes) {
-                cutscenes[cutscene.getName().lowercase()] = cutscene
+                cutscenes[cutscene.name.lowercase()] = cutscene
             }
             plugin.logger.info("Loaded ${loadedCutscenes.size} cutscenes from database")
         } catch (e: Exception) {
@@ -132,15 +132,15 @@ class CutsceneManager(private val plugin: Nonscenes) {
     }
 
     private fun saveCutscene(cutscene: Cutscene) {
-        val file = File(cutsceneFolder, "${cutscene.getName()}.yml")
+        val file = File(cutsceneFolder, "${cutscene.name}.yml")
         val config = YamlConfiguration()
 
-        config.set("name", cutscene.getName())
+        config.set("name", cutscene.name)
 
-        val frames = cutscene.getFrames()
+        val frames = cutscene.frames
         for (i in frames.indices) {
             val frame = frames[i]
-            val location = frame.getLocation()
+            val location = frame.location
 
             config.set("frames.$i.world", location.world?.name ?: "world")
             config.set("frames.$i.x", location.x)
@@ -153,7 +153,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
         try {
             config.save(file)
         } catch (e: IOException) {
-            plugin.logger.warning("Failed to save cutscene: ${cutscene.getName()}")
+            plugin.logger.warning("Failed to save cutscene: ${cutscene.name}")
         }
     }
 
@@ -263,7 +263,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
             return
         }
 
-        val frames = cutscene.getFrames()
+        val frames = cutscene.frames
         if (frames.isEmpty()) {
             val message = configManager?.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' has no frames!"
             player.sendMessage(message)
@@ -294,7 +294,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
                 if (currentFrameIndex >= frames.size - 1) {
                     // Last frame - teleport directly
                     val lastFrame = frames[frames.size - 1]
-                    val lastLocation = lastFrame.getLocation()
+                    val lastLocation = lastFrame.location
 
                     if (!lastLocation.world.isChunkLoaded(lastLocation.blockX shr 4, lastLocation.blockZ shr 4)) {
                         lastLocation.world.loadChunk(lastLocation.blockX shr 4, lastLocation.blockZ shr 4, true)
@@ -315,8 +315,8 @@ class CutsceneManager(private val plugin: Nonscenes) {
                 val currentFrame = frames[currentFrameIndex]
                 val nextFrame = frames[currentFrameIndex + 1]
 
-                val currentLocation = currentFrame.getLocation()
-                val nextLocation = nextFrame.getLocation()
+                val currentLocation = currentFrame.location
+                val nextLocation = nextFrame.location
 
                 // Ensure chunks are loaded
                 if (!currentLocation.world.isChunkLoaded(currentLocation.blockX shr 4, currentLocation.blockZ shr 4)) {
@@ -404,8 +404,8 @@ class CutsceneManager(private val plugin: Nonscenes) {
 
         for ((_, cutscene) in cutscenes) {
             val itemMessage = configManager?.getMessage("cutscene-list-item")
-                ?.replace("{name}", cutscene.getName())
-                ?.replace("{frames}", cutscene.getFrames().size.toString()) ?: "§7- §f${cutscene.getName()} §7(${cutscene.getFrames().size} frames)"
+                ?.replace("{name}", cutscene.name)
+                ?.replace("{frames}", cutscene.frames.size.toString()) ?: "§7- §f${cutscene.name} §7(${cutscene.frames.size} frames)"
             player.sendMessage(itemMessage)
         }
     }
@@ -426,7 +426,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
             return
         }
 
-        val frames = cutscene.getFrames()
+        val frames = cutscene.frames
         if (frames.isEmpty()) {
             val message = configManager?.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' has no frames!"
             player.sendMessage(message)
@@ -451,8 +451,8 @@ class CutsceneManager(private val plugin: Nonscenes) {
                 }
 
                 for (i in 0 until frames.size - 1) {
-                    val start = frames[i].getLocation()
-                    val end = frames[i + 1].getLocation()
+                    val start = frames[i].location
+                    val end = frames[i + 1].location
 
                     if (start.world != end.world) {
                         continue
@@ -474,7 +474,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
                 }
 
                 for (frame in frames) {
-                    val loc = frame.getLocation()
+                    val loc = frame.location
                     loc.world.spawnParticle(
                         Particle.FLAME,
                         loc.x, loc.y, loc.z,

@@ -56,18 +56,18 @@ class RedisCutsceneDatabaseService(
 
         pool.resource.use { jedis ->
             try {
-                val key = "cutscene:${cutscene.getName()}"
+                val key = "cutscene:${cutscene.name}"
 
                 // Delete existing cutscene
                 jedis.del(key)
 
                 // Store cutscene metadata
-                jedis.hset(key, "name", cutscene.getName())
-                jedis.hset(key, "frameCount", cutscene.getFrames().size.toString())
+                jedis.hset(key, "name", cutscene.name)
+                jedis.hset(key, "frameCount", cutscene.frames.size.toString())
 
                 // Store frames
-                cutscene.getFrames().forEachIndexed { index, frame ->
-                    val location = frame.getLocation()
+                cutscene.frames.forEachIndexed { index, frame ->
+                    val location = frame.location
                     val frameKey = "$key:frame:$index"
                     jedis.hset(frameKey, "world", location.world?.name ?: "world")
                     jedis.hset(frameKey, "x", location.x.toString())
@@ -79,7 +79,7 @@ class RedisCutsceneDatabaseService(
 
             } catch (e: Exception) {
                 logger.severe("Failed to save cutscene: ${e.message}")
-                throw RuntimeException("Failed to save cutscene: ${cutscene.getName()}", e)
+                throw RuntimeException("Failed to save cutscene: ${cutscene.name}", e)
             }
         }
     }
