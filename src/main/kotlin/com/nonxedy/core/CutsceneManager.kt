@@ -283,6 +283,9 @@ class CutsceneManager(private val plugin: Nonscenes) {
 
         val originalLocation = player.location.clone()
 
+        // Pre-load all chunks needed for the cutscene to avoid lag during playback
+        preloadChunksForCutscene(frames)
+
         val framesPerSecond = configManager?.config?.getInt("settings.frames-per-second", 30) ?: 30
         val interpolationSteps = configManager?.config?.getInt("settings.playback.interpolation-steps", 10) ?: 10
 
@@ -291,6 +294,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
         val task = object : BukkitRunnable() {
             var currentFrameIndex = 0
             var currentInterpolationStep = 0
+            val cachedChunks = mutableSetOf<Pair<Int, Int>>() // Cache loaded chunk coordinates
 
             override fun run() {
                 if (currentFrameIndex >= frames.size - 1) {
@@ -298,9 +302,8 @@ class CutsceneManager(private val plugin: Nonscenes) {
                     val lastFrame = frames[frames.size - 1]
                     val lastLocation = lastFrame.location
 
-                    if (!lastLocation.world.isChunkLoaded(lastLocation.blockX shr 4, lastLocation.blockZ shr 4)) {
-                        lastLocation.world.loadChunk(lastLocation.blockX shr 4, lastLocation.blockZ shr 4, true)
-                    }
+                    // Ensure final chunk is loaded (should already be from preload)
+                    ensureChunkLoaded(lastLocation, cachedChunks)
 
                     player.teleport(lastLocation)
 
@@ -320,13 +323,9 @@ class CutsceneManager(private val plugin: Nonscenes) {
                 val currentLocation = currentFrame.location
                 val nextLocation = nextFrame.location
 
-                // Ensure chunks are loaded
-                if (!currentLocation.world.isChunkLoaded(currentLocation.blockX shr 4, currentLocation.blockZ shr 4)) {
-                    currentLocation.world.loadChunk(currentLocation.blockX shr 4, currentLocation.blockZ shr 4, true)
-                }
-                if (!nextLocation.world.isChunkLoaded(nextLocation.blockX shr 4, nextLocation.blockZ shr 4)) {
-                    nextLocation.world.loadChunk(nextLocation.blockX shr 4, nextLocation.blockZ shr 4, true)
-                }
+                // Ensure chunks are loaded (use cache to avoid repeated checks)
+                ensureChunkLoaded(currentLocation, cachedChunks)
+                ensureChunkLoaded(nextLocation, cachedChunks)
 
                 // Interpolate between current and next frame
                 val t = currentInterpolationStep.toFloat() / interpolationSteps
@@ -352,6 +351,80 @@ class CutsceneManager(private val plugin: Nonscenes) {
         }.runTaskTimer(plugin, 0L, delay)
 
         playbackTasks[playerId] = task
+    }
+
+    // Pre-loads all chunks needed for a cutscene to prevent lag during playback
+    private fun preloadChunksForCutscene(frames: List<CutsceneFrame>) {
+        val chunksToLoad = mutableSetOf<Pair<Int, Int>>()
+
+        // Collect all unique chunk coordinates from frames
+        frames.forEach { frame ->
+            val location = frame.location
+            val chunkX = location.blockX shr 4
+            val chunkZ = location.blockZ shr 4
+            chunksToLoad.add(chunkX to chunkZ)
+
+            // Also preload adjacent chunks for smoother experience
+            for (dx in -1..1) {
+                for (dz in -1..1) {
+                    chunksToLoad.add((chunkX + dx) to (chunkZ + dz))
+                }
+            }
+        }
+
+        // Load chunks asynchronously where possible
+        chunksToLoad.forEach { (chunkX, chunkZ) ->
+            frames.firstOrNull()?.location?.world?.let { world ->
+                if (!world.isChunkLoaded(chunkX, chunkZ)) {
+                    // Use async chunk loading for better performance
+                    plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
+                        world.loadChunk(chunkX, chunkZ, true)
+                    })
+                }
+            }
+        }
+    }
+
+    // Ensures a chunk is loaded, using a cache to avoid repeated checks
+    private fun ensureChunkLoaded(location: Location, cachedChunks: MutableSet<Pair<Int, Int>>) {
+        val chunkX = location.blockX shr 4
+        val chunkZ = location.blockZ shr 4
+        val chunkKey = chunkX to chunkZ
+
+        if (chunkKey !in cachedChunks) {
+            if (!location.world.isChunkLoaded(chunkX, chunkZ)) {
+                location.world.loadChunk(chunkX, chunkZ, true)
+            }
+            cachedChunks.add(chunkKey)
+        }
+    }
+
+    // Location interpolation
+    private fun interpolateLocation(from: Location, to: Location, t: Float): Location {
+        if (from.world != to.world) {
+            return from
+        }
+
+        // Pre-calculate differences to avoid repeated calculations
+        val deltaX = to.x - from.x
+        val deltaY = to.y - from.y
+        val deltaZ = to.z - from.z
+
+        // Calculate yaw difference with proper wrapping
+        var deltaYaw = to.yaw - from.yaw
+        if (deltaYaw > 180) deltaYaw -= 360
+        else if (deltaYaw < -180) deltaYaw += 360
+
+        val deltaPitch = to.pitch - from.pitch
+
+        // Interpolate using pre-calculated deltas
+        val x = from.x + deltaX * t
+        val y = from.y + deltaY * t
+        val z = from.z + deltaZ * t
+        val yaw = from.yaw + deltaYaw * t
+        val pitch = from.pitch + deltaPitch * t
+
+        return Location(from.world, x, y, z, yaw, pitch)
     }
 
     private fun finishPlayback(player: Player, name: String, originalLocation: Location) {
