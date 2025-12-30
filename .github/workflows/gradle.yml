@@ -35,8 +35,6 @@ jobs:
       with:
         gradle-version: '9.2.1'
     
-    - name: Grant execute permission for gradlew
-      run: chmod +x gradlew
     - name: Build with Gradle Wrapper
       run: ./gradlew build
 
