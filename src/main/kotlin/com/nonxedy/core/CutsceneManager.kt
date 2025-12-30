@@ -173,7 +173,9 @@ class CutsceneManager(private val plugin: Nonscenes) {
         }
 
         val countdownSeconds = configManager?.config?.getInt("settings.countdown-seconds", 3) ?: 3
-        val countdownMessage = configManager?.getMessage("recording-countdown")?.replace("{seconds}", countdownSeconds.toString()) ?: "§aRecording will start in $countdownSeconds seconds..."
+        val countdownMessage = configManager?.getMessage("recording-countdown")
+            ?.replace("{seconds}", countdownSeconds.toString())
+            ?: "§aRecording will start in $countdownSeconds seconds..."
         player.sendMessage(countdownMessage)
 
         object : BukkitRunnable() {
@@ -492,58 +494,51 @@ class CutsceneManager(private val plugin: Nonscenes) {
     fun cancelRecording(player: Player) {
         val playerId = player.uniqueId
 
-        if (!recordingSessions.containsKey(playerId)) {
+        recordingSessions[playerId]?.let { name ->
+            recordingTasks[playerId]?.cancel()
+            recordingSessions.remove(playerId)
+            recordingTasks.remove(playerId)
+            recordingFrameCounters.remove(playerId)
+
+            val message = configManager?.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cCancelled recording of cutscene '$name'!"
+            player.sendMessage(message)
+        } ?: run {
             val message = configManager?.getMessage("recording-cancelled") ?: "§7You are not recording anything."
             player.sendMessage(message)
-            return
         }
-
-        val task = recordingTasks[playerId]
-        task?.cancel()
-
-        val name = recordingSessions.remove(playerId)
-        recordingTasks.remove(playerId)
-        recordingFrameCounters.remove(playerId)
-
-        val message = configManager?.getMessage("playback-cancelled")?.replace("{name}", name ?: "unknown") ?: "§cCancelled recording of cutscene '$name'!"
-        player.sendMessage(message)
     }
 
     fun cancelPlayback(player: Player) {
         val playerId = player.uniqueId
 
-        if (!playbackSessions.containsKey(playerId)) {
+        playbackSessions[playerId]?.let { name ->
+            playbackTasks[playerId]?.cancel()
+
+            // Restore player's game mode
+            savedGameModes.remove(playerId)?.let { originalGameMode ->
+                player.gameMode = originalGameMode
+            }
+
+            playbackSessions.remove(playerId)
+            playbackTasks.remove(playerId)
+
+            val message = configManager?.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cCancelled playback of cutscene '$name'!"
+            player.sendMessage(message)
+        } ?: run {
             val message = configManager?.getMessage("recording-cancelled") ?: "§7You are not watching a cutscene."
             player.sendMessage(message)
-            return
         }
-
-        val task = playbackTasks[playerId]
-        task?.cancel()
-
-        // Restore player's game mode
-        val savedGameMode = savedGameModes.remove(playerId)
-        if (savedGameMode != null) {
-            player.gameMode = savedGameMode
-        }
-
-        val name = playbackSessions.remove(playerId)
-        playbackTasks.remove(playerId)
-
-        val message = configManager?.getMessage("playback-cancelled")?.replace("{name}", name ?: "unknown") ?: "§cCancelled playback of cutscene '$name'!"
-        player.sendMessage(message)
     }
 
     fun cancelPathVisualization(player: Player) {
         val playerId = player.uniqueId
 
-        val task = pathVisualizationTasks[playerId]
-        if (task != null) {
+        pathVisualizationTasks[playerId]?.let { task ->
             task.cancel()
             pathVisualizationTasks.remove(playerId)
             val message = configManager?.getMessage("path-visualization-cancelled") ?: "§aCancelled path visualization!"
             player.sendMessage(message)
-        } else {
+        } ?: run {
             val message = configManager?.getMessage("recording-cancelled") ?: "§7You are not visualizing any path."
             player.sendMessage(message)
         }

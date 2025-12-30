@@ -10,24 +10,21 @@ import java.sql.DriverManager
 import java.util.logging.Level
 import java.util.logging.Logger
 
-/**
- * Abstract base class for SQL-based CutsceneDatabaseService implementations.
- * Provides common functionality for CRUD operations.
- */
+// Abstract base class for SQL-based CutsceneDatabaseService implementations
+// Provides common functionality for CRUD operations
 abstract class AbstractSQLCutsceneDatabaseService : CutsceneDatabaseService {
 
     protected val logger: Logger = Logger.getLogger(javaClass.simpleName)
     protected var connection: Connection? = null
 
-    /**
-     * Get the JDBC URL for the database connection
-     */
+    // Get the JDBC URL for the database connection
     protected abstract fun getJdbcUrl(): String
 
-    /**
-     * Get the SQL for creating tables
-     */
+    // Get the SQL for creating tables
     protected abstract fun getCreateTablesSQL(): Array<String>
+
+    // Get a database connection, creating one if needed
+    protected fun requireConnection(): Connection = connection ?: throw RuntimeException("Database not initialized")
 
     override fun initialize() {
         try {
