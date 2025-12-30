@@ -172,7 +172,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
             return
         }
 
-        val countdownSeconds = 3
+        val countdownSeconds = configManager?.config?.getInt("settings.countdown-seconds", 3) ?: 3
         val countdownMessage = configManager?.getMessage("recording-countdown")?.replace("{seconds}", countdownSeconds.toString()) ?: "§aRecording will start in $countdownSeconds seconds..."
         player.sendMessage(countdownMessage)
 
@@ -201,7 +201,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
         val message = configManager?.getMessage("recording-started")?.replace("{name}", name) ?: "§aStarted recording cutscene '$name'!"
         player.sendMessage(message)
 
-        val framesPerSecond = 30 // Default FPS
+        val framesPerSecond = configManager?.config?.getInt("settings.frames-per-second", 30) ?: 30
         val delay = max(1L, 20L / framesPerSecond)
 
         val task = object : BukkitRunnable() {
@@ -281,8 +281,8 @@ class CutsceneManager(private val plugin: Nonscenes) {
 
         val originalLocation = player.location.clone()
 
-        val framesPerSecond = 30
-        val interpolationSteps = 10
+        val framesPerSecond = configManager?.config?.getInt("settings.frames-per-second", 30) ?: 30
+        val interpolationSteps = configManager?.config?.getInt("settings.playback.interpolation-steps", 10) ?: 10
 
         val delay = max(1L, 20L / (framesPerSecond * interpolationSteps))
 
@@ -433,7 +433,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
             return
         }
 
-        val durationSeconds = 30
+        val durationSeconds = configManager?.config?.getInt("settings.path-visualization.duration", 30) ?: 30
         val message = configManager?.getMessage("showing-path")
             ?.replace("{name}", name)
             ?.replace("{duration}", durationSeconds.toString()) ?: "§aShowing path for '$name' ($durationSeconds seconds)..."
