@@ -37,10 +37,6 @@ jobs:
     
     - name: Grant execute permission for gradlew
       run: chmod +x gradlew
-    
-    - name: Grant permission for jarfile
-      run: chmod +r /home/runner/work/nonscenes/nonscenes/gradle/wrapper/gradle-wrapper.jar
-
     - name: Build with Gradle Wrapper
       run: ./gradlew build
 
