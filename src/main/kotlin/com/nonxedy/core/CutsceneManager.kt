@@ -28,8 +28,7 @@ import java.util.logging.Level
 import kotlin.math.max
 import kotlin.math.min
 
-class CutsceneManager(private val plugin: Nonscenes) {
-    private val configManager: ConfigManager? = plugin.getConfigManager()
+class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface {
     private val databaseService: CutsceneDatabaseService
     private val cutscenes = mutableMapOf<String, Cutscene>()
     private val recordingSessions = ConcurrentHashMap<UUID, String>()
@@ -157,23 +156,23 @@ class CutsceneManager(private val plugin: Nonscenes) {
         }
     }
 
-    fun startRecording(player: Player, name: String, frames: Int) {
+    override fun startRecording(player: Player, name: String, frames: Int) {
         val playerId = player.uniqueId
 
         if (recordingSessions.containsKey(playerId)) {
-            val message = configManager?.getMessage("already-recording") ?: "§cYou are already recording a cutscene!"
+            val message = plugin.configManager.getMessage("already-recording")
             player.sendMessage(message)
             return
         }
 
         if (cutscenes.containsKey(name.lowercase())) {
-            val message = configManager?.getMessage("cutscene-already-exists")?.replace("{name}", name) ?: "§cA cutscene with that name already exists!"
+            val message = plugin.configManager.getMessage("cutscene-already-exists")?.replace("{name}", name) ?: "§cA cutscene with that name already exists!"
             player.sendMessage(message)
             return
         }
 
-        val countdownSeconds = configManager?.config?.getInt("settings.countdown-seconds", 3) ?: 3
-        val countdownMessage = configManager?.getMessage("recording-countdown")
+        val countdownSeconds = plugin.configManager.config?.getInt("settings.countdown-seconds", 3) ?: 3
+        val countdownMessage = plugin.configManager.getMessage("recording-countdown")
             ?.replace("{seconds}", countdownSeconds.toString())
             ?: "§aRecording will start in $countdownSeconds seconds..."
         player.sendMessage(countdownMessage)
@@ -183,7 +182,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
 
             override fun run() {
                 if (seconds > 0) {
-                    val countdownTickMessage = configManager?.getMessage("countdown")?.replace("{seconds}", seconds.toString()) ?: "§e$seconds..."
+                    val countdownTickMessage = plugin.configManager.getMessage("countdown")?.replace("{seconds}", seconds.toString()) ?: "§e$seconds..."
                     player.sendMessage(countdownTickMessage)
                     seconds--
                 } else {
@@ -200,10 +199,10 @@ class CutsceneManager(private val plugin: Nonscenes) {
         recordingSessions[playerId] = name
         recordingFrameCounters[playerId] = 0
 
-        val message = configManager?.getMessage("recording-started")?.replace("{name}", name) ?: "§aStarted recording cutscene '$name'!"
+        val message = plugin.configManager.getMessage("recording-started")?.replace("{name}", name) ?: "§aStarted recording cutscene '$name'!"
         player.sendMessage(message)
 
-        val framesPerSecond = configManager?.config?.getInt("settings.frames-per-second", 30) ?: 30
+        val framesPerSecond = plugin.configManager.config?.getInt("settings.frames-per-second", 30) ?: 30
         val delay = max(1L, 20L / framesPerSecond)
 
         val task = object : BukkitRunnable() {
@@ -221,7 +220,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
                 recordingFrameCounters[playerId] = frameCount
 
                 if (frameCount % framesPerSecond == 0 || frameCount == totalFrames) {
-                    val progressMessage = configManager?.getMessage("recording-progress")
+                    val progressMessage = plugin.configManager.getMessage("recording-progress")
                         ?.replace("{current}", frameCount.toString())
                         ?.replace("{total}", totalFrames.toString()) ?: "§7Recorded $frameCount/$totalFrames frames"
                     player.sendMessage(progressMessage)
@@ -239,7 +238,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
         cutscenes[name.lowercase()] = cutscene
         saveCutscene(cutscene)
 
-        val message = configManager?.getMessage("recording-finished")
+        val message = plugin.configManager.getMessage("recording-finished")
             ?.replace("{name}", name)
             ?.replace("{frames}", frames.size.toString()) ?: "§aFinished recording cutscene '$name' with ${frames.size} frames!"
         player.sendMessage(message)
@@ -249,31 +248,31 @@ class CutsceneManager(private val plugin: Nonscenes) {
         recordingFrameCounters.remove(playerId)
     }
 
-    fun playCutscene(player: Player, name: String) {
+    override fun playCutscene(player: Player, name: String) {
         val playerId = player.uniqueId
 
         if (playbackSessions.containsKey(playerId)) {
-            val message = configManager?.getMessage("already-playing") ?: "§cYou are already watching a cutscene!"
+            val message = plugin.configManager.getMessage("already-playing")
             player.sendMessage(message)
             return
         }
 
         val cutscene = cutscenes[name.lowercase()]
         if (cutscene == null) {
-            val message = configManager?.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' not found!"
+            val message = plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' not found!"
             player.sendMessage(message)
             return
         }
 
         val frames = cutscene.frames
         if (frames.isEmpty()) {
-            val message = configManager?.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' has no frames!"
+            val message = plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' has no frames!"
             player.sendMessage(message)
             return
         }
 
         playbackSessions[playerId] = name
-        val message = configManager?.getMessage("cutscene-playing")?.replace("{name}", name) ?: "§aPlaying cutscene '$name'..."
+        val message = plugin.configManager.getMessage("cutscene-playing")?.replace("{name}", name) ?: "§aPlaying cutscene '$name'..."
         player.sendMessage(message)
 
         // Save player's game mode and set to spectator
@@ -286,8 +285,8 @@ class CutsceneManager(private val plugin: Nonscenes) {
         // Pre-load all chunks needed for the cutscene to avoid lag during playback
         preloadChunksForCutscene(frames)
 
-        val framesPerSecond = configManager?.config?.getInt("settings.frames-per-second", 30) ?: 30
-        val interpolationSteps = configManager?.config?.getInt("settings.playback.interpolation-steps", 10) ?: 10
+        val framesPerSecond = plugin.configManager.config?.getInt("settings.frames-per-second", 30) ?: 30
+        val interpolationSteps = plugin.configManager.config?.getInt("settings.playback.interpolation-steps", 10) ?: 10
 
         val delay = max(1L, 20L / (framesPerSecond * interpolationSteps))
 
@@ -442,16 +441,16 @@ class CutsceneManager(private val plugin: Nonscenes) {
         }
 
         player.teleport(originalLocation)
-        val message = configManager?.getMessage("cutscene-playback-finished")?.replace("{name}", name) ?: "§aFinished playing cutscene '$name'!"
+        val message = plugin.configManager.getMessage("cutscene-playback-finished")?.replace("{name}", name) ?: "§aFinished playing cutscene '$name'!"
         player.sendMessage(message)
 
         playbackSessions.remove(playerId)
         playbackTasks.remove(playerId)
     }
 
-    fun deleteCutscene(player: Player, name: String) {
+    override fun deleteCutscene(player: Player, name: String) {
         if (!cutscenes.containsKey(name.lowercase())) {
-            val message = configManager?.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' not found!"
+            val message = plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' not found!"
             player.sendMessage(message)
             return
         }
@@ -463,53 +462,53 @@ class CutsceneManager(private val plugin: Nonscenes) {
         }
 
         cutscenes.remove(name.lowercase())
-        val message = configManager?.getMessage("cutscene-deleted")?.replace("{name}", name) ?: "§aDeleted cutscene '$name'!"
+        val message = plugin.configManager.getMessage("cutscene-deleted")?.replace("{name}", name) ?: "§aDeleted cutscene '$name'!"
         player.sendMessage(message)
     }
 
-    fun listAllCutscenes(player: Player) {
+    override fun listAllCutscenes(player: Player) {
         if (cutscenes.isEmpty()) {
-            val message = configManager?.getMessage("no-cutscenes") ?: "§7No cutscenes found."
+            val message = plugin.configManager.getMessage("no-cutscenes") ?: "§7No cutscenes found."
             player.sendMessage(message)
             return
         }
 
-        val headerMessage = configManager?.getMessage("cutscene-list-header") ?: "§6=== Available Cutscenes ==="
+        val headerMessage = plugin.configManager.getMessage("cutscene-list-header") ?: "§6=== Available Cutscenes ==="
         player.sendMessage(headerMessage)
 
         for ((_, cutscene) in cutscenes) {
-            val itemMessage = configManager?.getMessage("cutscene-list-item")
+            val itemMessage = plugin.configManager.getMessage("cutscene-list-item")
                 ?.replace("{name}", cutscene.name)
                 ?.replace("{frames}", cutscene.frames.size.toString()) ?: "§7- §f${cutscene.name} §7(${cutscene.frames.size} frames)"
             player.sendMessage(itemMessage)
         }
     }
 
-    fun showCutscenePath(player: Player, name: String) {
+    override fun showCutscenePath(player: Player, name: String) {
         val playerId = player.uniqueId
 
         if (pathVisualizationTasks.containsKey(playerId)) {
-            val message = configManager?.getMessage("path-already-showing") ?: "§cYou are already visualizing a path!"
+            val message = plugin.configManager.getMessage("path-already-showing") ?: "§cYou are already visualizing a path!"
             player.sendMessage(message)
             return
         }
 
         val cutscene = cutscenes[name.lowercase()]
         if (cutscene == null) {
-            val message = configManager?.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' not found!"
+            val message = plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' not found!"
             player.sendMessage(message)
             return
         }
 
         val frames = cutscene.frames
         if (frames.isEmpty()) {
-            val message = configManager?.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' has no frames!"
+            val message = plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' has no frames!"
             player.sendMessage(message)
             return
         }
 
-        val durationSeconds = configManager?.config?.getInt("settings.path-visualization.duration", 30) ?: 30
-        val message = configManager?.getMessage("showing-path")
+        val durationSeconds = plugin.configManager.config?.getInt("settings.path-visualization.duration", 30) ?: 30
+        val message = plugin.configManager.getMessage("showing-path")
             ?.replace("{name}", name)
             ?.replace("{duration}", durationSeconds.toString()) ?: "§aShowing path for '$name' ($durationSeconds seconds)..."
         player.sendMessage(message)
@@ -564,7 +563,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
         pathVisualizationTasks[playerId] = task
     }
 
-    fun cancelRecording(player: Player) {
+    override fun cancelRecording(player: Player) {
         val playerId = player.uniqueId
 
         recordingSessions[playerId]?.let { name ->
@@ -573,15 +572,15 @@ class CutsceneManager(private val plugin: Nonscenes) {
             recordingTasks.remove(playerId)
             recordingFrameCounters.remove(playerId)
 
-            val message = configManager?.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cCancelled recording of cutscene '$name'!"
+            val message = plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cCancelled recording of cutscene '$name'!"
             player.sendMessage(message)
         } ?: run {
-            val message = configManager?.getMessage("recording-cancelled") ?: "§7You are not recording anything."
+            val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not recording anything."
             player.sendMessage(message)
         }
     }
 
-    fun cancelPlayback(player: Player) {
+    override fun cancelPlayback(player: Player) {
         val playerId = player.uniqueId
 
         playbackSessions[playerId]?.let { name ->
@@ -595,37 +594,37 @@ class CutsceneManager(private val plugin: Nonscenes) {
             playbackSessions.remove(playerId)
             playbackTasks.remove(playerId)
 
-            val message = configManager?.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cCancelled playback of cutscene '$name'!"
+            val message = plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cCancelled playback of cutscene '$name'!"
             player.sendMessage(message)
         } ?: run {
-            val message = configManager?.getMessage("recording-cancelled") ?: "§7You are not watching a cutscene."
+            val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not watching a cutscene."
             player.sendMessage(message)
         }
     }
 
-    fun cancelPathVisualization(player: Player) {
+    override fun cancelPathVisualization(player: Player) {
         val playerId = player.uniqueId
 
         pathVisualizationTasks[playerId]?.let { task ->
             task.cancel()
             pathVisualizationTasks.remove(playerId)
-            val message = configManager?.getMessage("path-visualization-cancelled") ?: "§aCancelled path visualization!"
+            val message = plugin.configManager.getMessage("path-visualization-cancelled") ?: "§aCancelled path visualization!"
             player.sendMessage(message)
         } ?: run {
-            val message = configManager?.getMessage("recording-cancelled") ?: "§7You are not visualizing any path."
+            val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not visualizing any path."
             player.sendMessage(message)
         }
     }
 
-    fun isRecording(player: Player): Boolean = recordingSessions.containsKey(player.uniqueId)
+    override fun isRecording(player: Player): Boolean = recordingSessions.containsKey(player.uniqueId)
 
-    fun isWatchingCutscene(player: Player): Boolean = playbackSessions.containsKey(player.uniqueId)
+    override fun isWatchingCutscene(player: Player): Boolean = playbackSessions.containsKey(player.uniqueId)
 
-    fun getCutsceneNames(): List<String> = cutscenes.keys.toList()
+    override fun getCutsceneNames(): List<String> = cutscenes.keys.toList()
 
-    fun getCutscene(name: String): Cutscene? = cutscenes[name.lowercase()]
+    override fun getCutscene(name: String): Cutscene? = cutscenes[name.lowercase()]
 
-    fun cancelAllSessions(player: Player) {
+    override fun cancelAllSessions(player: Player) {
         val playerId = player.uniqueId
         var cancelledSomething = false
 
@@ -648,14 +647,12 @@ class CutsceneManager(private val plugin: Nonscenes) {
         }
 
         if (!cancelledSomething) {
-            val message = configManager?.getMessage("nothing-to-cancel") ?: "§7Nothing to cancel."
+            val message = plugin.configManager.getMessage("nothing-to-cancel") ?: "§7Nothing to cancel."
             player.sendMessage(message)
         }
     }
 
-    /**
-     * Interpolates between two locations
-     */
+    // Interpolates between two locations
     private fun interpolateLocations(from: Location, to: Location, t: Float): Location {
         if (from.world != to.world) {
             return from
@@ -676,7 +673,7 @@ class CutsceneManager(private val plugin: Nonscenes) {
         return Location(from.world, x, y, z, yaw, pitch)
     }
 
-    fun cleanup() {
+    override fun cleanup() {
         for (task in recordingTasks.values) {
             task?.cancel()
         }

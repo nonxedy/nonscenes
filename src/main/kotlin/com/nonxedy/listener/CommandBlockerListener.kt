@@ -10,17 +10,14 @@ class CommandBlockerListener(private val plugin: Nonscenes) : Listener {
     @EventHandler
     fun onPlayerCommand(event: PlayerCommandPreprocessEvent) {
         val player = event.player
-        val cutsceneManager = plugin.getCutsceneManager()
 
         // Check if player is currently watching a cutscene
-        if (cutsceneManager?.isWatchingCutscene(player) == true) {
+        if (plugin.cutsceneManager.isWatchingCutscene(player)) {
             // Allow only the stop command during cutscene playback
             val command = event.message.lowercase().trim()
             if (!command.startsWith("/nonscene stop") && !command.startsWith("/ns stop")) {
                 event.isCancelled = true
-                val configManager = plugin.getConfigManager()
-                val message = configManager?.getMessage("command-disabled-during-cutscene")
-                    ?: "§cYou cannot use commands while watching a cutscene! Use /nonscene stop to exit."
+                val message = plugin.configManager.getMessage("command-disabled-during-cutscene")
                 player.sendMessage(message)
             }
         }

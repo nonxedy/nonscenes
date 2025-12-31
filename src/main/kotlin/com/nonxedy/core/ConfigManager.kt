@@ -11,15 +11,15 @@ import java.io.InputStreamReader
 import java.nio.charset.StandardCharsets
 import java.util.logging.Level
 
-class ConfigManager(private val plugin: Nonscenes) {
-    var config: FileConfiguration? = null
+class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
+    override var config: FileConfiguration? = null
         private set
     var messages: FileConfiguration? = null
         private set
     private var configFile: File? = null
     private var messagesFile: File? = null
 
-    fun loadConfigs() {
+    override fun loadConfigs() {
         // Create plugin directory if it doesn't exist
         if (!plugin.dataFolder.exists()) {
             plugin.dataFolder.mkdirs()
@@ -91,7 +91,7 @@ class ConfigManager(private val plugin: Nonscenes) {
     }
 
     // Gets a message from messages.yml and formats it with color codes.
-    fun getMessage(path: String): String {
+    override fun getMessage(path: String): String {
         var message = messages?.getString(path, "Missing message: $path") ?: "Missing message: $path"
 
         if (message.contains("\${prefix}")) {
@@ -103,7 +103,7 @@ class ConfigManager(private val plugin: Nonscenes) {
     }
 
     // Gets a message from messages.yml as a Component for modern messaging
-    fun getMessageComponent(path: String): Component {
+    override fun getMessageComponent(path: String): Component {
         var message = messages?.getString(path, "Missing message: $path") ?: "Missing message: $path"
 
         if (message.contains("\${prefix}")) {
@@ -115,21 +115,21 @@ class ConfigManager(private val plugin: Nonscenes) {
     }
 
     // Gets a list of messages from messages.yml and formats them with color codes.
-    fun getMessageList(path: String): List<String> {
+    override fun getMessageList(path: String): List<String> {
         val messageList = messages?.getStringList(path) ?: emptyList()
         return messageList.map { ColorUtil.format(it) }
     }
 
     // Gets a list of messages from messages.yml as Kyori Components.
-    fun getMessageComponentList(path: String): List<Component> {
+    override fun getMessageComponentList(path: String): List<Component> {
         val messageList = messages?.getStringList(path) ?: emptyList()
         return messageList.map { ColorUtil.toComponent(it) }
     }
 
     // Gets the help messages from messages.yml.
-    fun getHelpMessages(): List<String> = getMessageList("help-messages")
+    override fun getHelpMessages(): List<String> = getMessageList("help-messages")
 
-    fun reloadConfigs() {
+    override fun reloadConfigs() {
         config = configFile?.let { YamlConfiguration.loadConfiguration(it) }
         messages = messagesFile?.let { YamlConfiguration.loadConfiguration(it) }
 
@@ -151,7 +151,7 @@ class ConfigManager(private val plugin: Nonscenes) {
         }
     }
 
-    fun saveConfig() {
+    override fun saveConfig() {
         try {
             config?.save(configFile!!)
         } catch (e: IOException) {
@@ -159,7 +159,7 @@ class ConfigManager(private val plugin: Nonscenes) {
         }
     }
 
-    fun saveMessages() {
+    override fun saveMessages() {
         try {
             val currentMessagesFile = messagesFile
             val currentMessages = messages

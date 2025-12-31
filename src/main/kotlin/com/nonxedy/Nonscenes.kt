@@ -4,23 +4,25 @@ import org.bukkit.command.PluginCommand
 import org.bukkit.plugin.java.JavaPlugin
 import com.nonxedy.command.NonsceneCommand
 import com.nonxedy.core.ConfigManager
+import com.nonxedy.core.ConfigManagerInterface
 import com.nonxedy.core.CutsceneManager
+import com.nonxedy.core.CutsceneManagerInterface
 import com.nonxedy.listener.CommandBlockerListener
 import java.util.logging.Logger
 
 class Nonscenes : JavaPlugin() {
     private val logger = Logger.getLogger("nonscenes")
-    private var configManager: ConfigManager? = null
-    private var cutsceneManager: CutsceneManager? = null
+
+    // Dependency injection with lateinit var
+    lateinit var configManager: ConfigManagerInterface
+        private set
+    lateinit var cutsceneManager: CutsceneManagerInterface
+        private set
 
     override fun onEnable() {
         try {
-            // Initialize config manager
-            configManager = ConfigManager(this)
-            configManager?.loadConfigs()
-
-            // Initialize cutscene manager
-            cutsceneManager = CutsceneManager(this)
+            // Initialize dependencies using dependency injection
+            initializeDependencies()
 
             // Register commands
             val nonsceneCommand = NonsceneCommand(this)
@@ -41,12 +43,22 @@ class Nonscenes : JavaPlugin() {
         }
     }
 
-    override fun onDisable() {
-        cutsceneManager?.cleanup()
-        logger.info("nonscenes disabled")
+    // Initialize all dependencies using dependency injection pattern
+    private fun initializeDependencies() {
+        // Initialize config manager
+        val configManagerImpl = ConfigManager(this)
+        configManagerImpl.loadConfigs()
+        configManager = configManagerImpl
+
+        // Initialize cutscene manager with dependency injection
+        val cutsceneManagerImpl = CutsceneManager(this)
+        cutsceneManager = cutsceneManagerImpl
     }
 
-    fun getConfigManager(): ConfigManager? = configManager
-
-    fun getCutsceneManager(): CutsceneManager? = cutsceneManager
+    override fun onDisable() {
+        if (::cutsceneManager.isInitialized) {
+            cutsceneManager.cleanup()
+        }
+        logger.info("nonscenes disabled")
+    }
 }

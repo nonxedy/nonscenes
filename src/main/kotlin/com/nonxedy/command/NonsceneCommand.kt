@@ -6,16 +6,16 @@ import org.bukkit.command.CommandSender
 import org.bukkit.command.TabCompleter
 import org.bukkit.entity.Player
 import com.nonxedy.Nonscenes
-import com.nonxedy.core.ConfigManager
-import com.nonxedy.core.CutsceneManager
+import com.nonxedy.core.ConfigManagerInterface
+import com.nonxedy.core.CutsceneManagerInterface
 
 class NonsceneCommand(private val plugin: Nonscenes) : CommandExecutor, TabCompleter {
-    private val configManager: ConfigManager? = plugin.getConfigManager()
-    private val cutsceneManager: CutsceneManager? = plugin.getCutsceneManager()
+    private val configManager: ConfigManagerInterface by lazy { plugin.configManager }
+    private val cutsceneManager: CutsceneManagerInterface by lazy { plugin.cutsceneManager }
 
     override fun onCommand(sender: CommandSender, command: Command, label: String, args: Array<String>): Boolean {
         if (sender !is Player) {
-            val message = configManager?.getMessage("player-only-command") ?: "This command can only be used by players."
+            val message = configManager.getMessage("player-only-command")
             sender.sendMessage(message)
             return true
         }
@@ -24,7 +24,7 @@ class NonsceneCommand(private val plugin: Nonscenes) : CommandExecutor, TabCompl
 
         // Check if player has permission
         if (!player.hasPermission("nonscene.use")) {
-            val message = configManager?.getMessage("no-permission") ?: "You don't have permission to use this command."
+            val message = configManager.getMessage("no-permission")
             player.sendMessage(message)
             return true
         }
@@ -39,13 +39,13 @@ class NonsceneCommand(private val plugin: Nonscenes) : CommandExecutor, TabCompl
         when (subCommand) {
             "start" -> {
                 if (!player.hasPermission("nonscene.start")) {
-                    val message = configManager?.getMessage("no-permission") ?: "§cYou don't have permission to use this command."
+                    val message = configManager.getMessage("no-permission")
                     player.sendMessage(message)
                     return true
                 }
 
                 if (args.size < 3) {
-                    val message = configManager?.getMessage("invalid-start-args") ?: "§cUsage: /nonscene start <name> <frames>"
+                    val message = configManager.getMessage("invalid-start-args")
                     player.sendMessage(message)
                     return true
                 }
@@ -56,85 +56,85 @@ class NonsceneCommand(private val plugin: Nonscenes) : CommandExecutor, TabCompl
                 try {
                     frames = args[2].toInt()
                     if (frames <= 0) {
-                        val message = configManager?.getMessage("invalid-frames-number") ?: "§cFrames number must be positive."
+                        val message = configManager.getMessage("invalid-frames-number")
                         player.sendMessage(message)
                         return true
                     }
                 } catch (e: NumberFormatException) {
-                    val message = configManager?.getMessage("invalid-frames-number") ?: "§cInvalid frames number."
+                    val message = configManager.getMessage("invalid-frames-number")
                     player.sendMessage(message)
                     return true
                 }
 
-                cutsceneManager?.startRecording(player, name, frames)
+                cutsceneManager.startRecording(player, name, frames)
             }
 
             "delete" -> {
                 if (!player.hasPermission("nonscene.delete")) {
-                    val message = configManager?.getMessage("no-permission") ?: "§cYou don't have permission to use this command."
+                    val message = configManager.getMessage("no-permission")
                     player.sendMessage(message)
                     return true
                 }
 
                 if (args.size < 2) {
-                    val message = configManager?.getMessage("specify-cutscene-name") ?: "§cPlease specify a cutscene name."
+                    val message = configManager.getMessage("specify-cutscene-name")
                     player.sendMessage(message)
                     return true
                 }
 
-                cutsceneManager?.deleteCutscene(player, args[1])
+                cutsceneManager.deleteCutscene(player, args[1])
             }
 
             "all" -> {
                 if (!player.hasPermission("nonscene.list")) {
-                    val message = configManager?.getMessage("no-permission") ?: "§cYou don't have permission to use this command."
+                    val message = configManager.getMessage("no-permission")
                     player.sendMessage(message)
                     return true
                 }
 
-                cutsceneManager?.listAllCutscenes(player)
+                cutsceneManager.listAllCutscenes(player)
             }
 
             "play" -> {
                 if (!player.hasPermission("nonscene.play")) {
-                    val message = configManager?.getMessage("no-permission") ?: "§cYou don't have permission to use this command."
+                    val message = configManager.getMessage("no-permission")
                     player.sendMessage(message)
                     return true
                 }
 
                 if (args.size < 2) {
-                    val message = configManager?.getMessage("specify-cutscene-name") ?: "§cPlease specify a cutscene name."
+                    val message = configManager.getMessage("specify-cutscene-name")
                     player.sendMessage(message)
                     return true
                 }
 
-                cutsceneManager?.playCutscene(player, args[1])
+                cutsceneManager.playCutscene(player, args[1])
             }
 
             "showpath" -> {
                 if (!player.hasPermission("nonscene.showpath")) {
-                    val message = configManager?.getMessage("no-permission") ?: "§cYou don't have permission to use this command."
+                    val message = configManager.getMessage("no-permission")
                     player.sendMessage(message)
                     return true
                 }
 
                 if (args.size < 2) {
-                    val message = configManager?.getMessage("specify-cutscene-name") ?: "§cPlease specify a cutscene name."
+                    val message = configManager.getMessage("specify-cutscene-name")
                     player.sendMessage(message)
                     return true
                 }
 
-                cutsceneManager?.showCutscenePath(player, args[1])
+                cutsceneManager.showCutscenePath(player, args[1])
             }
 
             "stop" -> {
                 if (!player.hasPermission("nonscene.stop")) {
-                    val message = configManager?.getMessage("no-permission") ?: "§cYou don't have permission to use this command."
+                    val message = configManager.getMessage("no-permission")
                     player.sendMessage(message)
                     return true
                 }
 
-                cutsceneManager?.cancelAllSessions(player)
+                cutsceneManager.cancelAllSessions(player)
             }
 
             else -> sendHelpMessage(player)
@@ -144,16 +144,7 @@ class NonsceneCommand(private val plugin: Nonscenes) : CommandExecutor, TabCompl
     }
 
     private fun sendHelpMessage(player: Player) {
-        val helpMessages = configManager?.getMessageList("help-messages") ?: listOf(
-            "§6=== Nonscenes Plugin ===",
-            "§7Available commands:",
-            "§7- §e/nonscene start <name> <frames> §7- Start recording",
-            "§7- §e/nonscene play <name> §7- Play cutscene",
-            "§7- §e/nonscene all §7- List cutscenes",
-            "§7- §e/nonscene delete <name> §7- Delete cutscene",
-            "§7- §e/nonscene showpath <name> §7- Show path",
-            "§7- §e/nonscene stop §7- Cancel current action"
-        )
+        val helpMessages = configManager.getMessageList("help-messages")
 
         helpMessages.forEach { message ->
             player.sendMessage(message)
@@ -185,7 +176,7 @@ class NonsceneCommand(private val plugin: Nonscenes) : CommandExecutor, TabCompl
 
             if ((subCommand == "delete" || subCommand == "play" || subCommand == "showpath")
                 && player.hasPermission("nonscene.$subCommand")) {
-                return filterCompletions(cutsceneManager?.getCutsceneNames() ?: emptyList(), args[1])
+                return filterCompletions(cutsceneManager.getCutsceneNames(), args[1])
             }
         }
 
