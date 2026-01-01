@@ -42,8 +42,8 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
             )
 
             for (key in defaultConfig.getKeys(true)) {
-                if (!config!!.contains(key)) {
-                    config!!.set(key, defaultConfig.get(key))
+                if (!requireNotNull(config).contains(key)) {
+                    requireNotNull(config).set(key, defaultConfig.get(key))
                     configUpdated = true
                 }
             }
@@ -51,7 +51,7 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
 
         if (configUpdated) {
             try {
-                config?.save(configFile!!)
+                config?.save(requireNotNull(configFile) { "Config file is null" })
             } catch (e: IOException) {
                 plugin.logger.log(Level.WARNING, "Could not save updated config.yml", e)
             }
@@ -74,8 +74,8 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
             )
 
             for (key in defaultMessages.getKeys(true)) {
-                if (!messages!!.contains(key)) {
-                    messages!!.set(key, defaultMessages.get(key))
+                if (!requireNotNull(messages).contains(key)) {
+                    requireNotNull(messages).set(key, defaultMessages.get(key))
                     messagesUpdated = true
                 }
             }
@@ -83,7 +83,7 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
 
         if (messagesUpdated) {
             try {
-                messages?.save(messagesFile!!)
+                messages?.save(requireNotNull(messagesFile) { "Messages file is null" })
             } catch (e: IOException) {
                 plugin.logger.log(Level.WARNING, "Could not save updated messages.yml", e)
             }
@@ -153,7 +153,7 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
 
     override fun saveConfig() {
         try {
-            config?.save(configFile!!)
+            config?.save(requireNotNull(configFile) { "Config file is null" })
         } catch (e: IOException) {
             plugin.logger.log(Level.SEVERE, "Could not save config to $configFile", e)
         }
