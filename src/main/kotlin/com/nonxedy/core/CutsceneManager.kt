@@ -328,7 +328,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
 
                 // Interpolate between current and next frame
                 val t = currentInterpolationStep.toFloat() / interpolationSteps
-                val interpolatedLocation = interpolateLocations(currentLocation, nextLocation, t)
+                val interpolatedLocation = interpolateLocation(currentLocation, nextLocation, t)
 
                 player.teleport(interpolatedLocation)
 
@@ -652,26 +652,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         }
     }
 
-    // Interpolates between two locations
-    private fun interpolateLocations(from: Location, to: Location, t: Float): Location {
-        if (from.world != to.world) {
-            return from
-        }
 
-        val x = from.x + (to.x - from.x) * t
-        val y = from.y + (to.y - from.y) * t
-        val z = from.z + (to.z - from.z) * t
-
-        var yawDiff = to.yaw - from.yaw
-        if (yawDiff > 180) yawDiff -= 360
-        else if (yawDiff < -180) yawDiff += 360
-        val yaw = from.yaw + yawDiff * t
-
-        val pitchDiff = to.pitch - from.pitch
-        val pitch = from.pitch + pitchDiff * t
-
-        return Location(from.world, x, y, z, yaw, pitch)
-    }
 
     override fun cleanup() {
         for (task in recordingTasks.values) {
