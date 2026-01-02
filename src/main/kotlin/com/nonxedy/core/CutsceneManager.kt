@@ -35,6 +35,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     private val sessionTasks = ConcurrentHashMap<UUID, BukkitTask>()
     private val savedInventories = ConcurrentHashMap<UUID, Array<ItemStack?>>()
     private val savedGameModes = ConcurrentHashMap<UUID, GameMode>()
+    private val savedLocations = ConcurrentHashMap<UUID, Location>()
     private val cutsceneFolder = File(plugin.dataFolder, "cutscenes")
 
     init {
@@ -284,6 +285,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         player.gameMode = GameMode.SPECTATOR
 
         val originalLocation = player.location.clone()
+        savedLocations[playerId] = originalLocation
 
         // Pre-load all chunks needed for the cutscene to avoid lag during playback
         preloadChunksForCutscene(frames)
@@ -447,6 +449,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         }
 
         player.teleport(originalLocation)
+        savedLocations.remove(playerId)
         val message = plugin.configManager.getMessage("cutscene-playback-finished")?.replace("{name}", name) ?: "§aFinished playing cutscene '$name'!"
         player.sendMessage(message)
 
@@ -605,6 +608,15 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
                 player.gameMode = originalGameMode
             }
 
+            // Teleport back to original location if saved
+            savedLocations.remove(playerId)?.let { originalLocation ->
+                // Ensure the original location chunk is loaded before teleporting back
+                if (!originalLocation.world.isChunkLoaded(originalLocation.blockX shr 4, originalLocation.blockZ shr 4)) {
+                    originalLocation.world.loadChunk(originalLocation.blockX shr 4, originalLocation.blockZ shr 4, true)
+                }
+                player.teleport(originalLocation)
+            }
+
             playerSessions.remove(playerId)
             sessionTasks.remove(playerId)
 
@@ -679,5 +691,6 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         sessionTasks.clear()
         savedInventories.clear()
         savedGameModes.clear()
+        savedLocations.clear()
     }
 }
