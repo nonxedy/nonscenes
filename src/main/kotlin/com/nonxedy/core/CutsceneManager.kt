@@ -31,12 +31,8 @@ import kotlin.math.min
 class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface {
     private val databaseService: CutsceneDatabaseService
     private val cutscenes = mutableMapOf<String, Cutscene>()
-    private val recordingSessions = ConcurrentHashMap<UUID, String>()
-    private val recordingTasks = ConcurrentHashMap<UUID, BukkitTask>()
-    private val recordingFrameCounters = ConcurrentHashMap<UUID, Int>()
-    private val playbackSessions = ConcurrentHashMap<UUID, String>()
-    private val playbackTasks = ConcurrentHashMap<UUID, BukkitTask>()
-    private val pathVisualizationTasks = ConcurrentHashMap<UUID, BukkitTask>()
+    private val playerSessions = ConcurrentHashMap<UUID, PlayerSession>()
+    private val sessionTasks = ConcurrentHashMap<UUID, BukkitTask>()
     private val savedInventories = ConcurrentHashMap<UUID, Array<ItemStack?>>()
     private val savedGameModes = ConcurrentHashMap<UUID, GameMode>()
     private val cutsceneFolder = File(plugin.dataFolder, "cutscenes")
@@ -159,7 +155,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     override fun startRecording(player: Player, name: String, frames: Int) {
         val playerId = player.uniqueId
 
-        if (recordingSessions.containsKey(playerId)) {
+        if (playerSessions.containsKey(playerId)) {
             val message = plugin.configManager.getMessage("already-recording")
             player.sendMessage(message)
             return
@@ -196,8 +192,10 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     private fun startRecordingProcess(player: Player, name: String, totalFrames: Int) {
         val playerId = player.uniqueId
         val frames = mutableListOf<CutsceneFrame>()
-        recordingSessions[playerId] = name
-        recordingFrameCounters[playerId] = 0
+
+        // Create recording session
+        val session = PlayerSession.Recording(playerId, name, totalFrames)
+        playerSessions[playerId] = session
 
         val message = plugin.configManager.getMessage("recording-started")?.replace("{name}", name) ?: "§aStarted recording cutscene '$name'!"
         player.sendMessage(message)
@@ -217,7 +215,9 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
 
                 frames.add(CutsceneFrame(player.location.clone()))
                 frameCount++
-                recordingFrameCounters[playerId] = frameCount
+
+                // Update session with current frame count
+                playerSessions[playerId] = session.copy(frameCount = frameCount)
 
                 if (frameCount % framesPerSecond == 0 || frameCount == totalFrames) {
                     val progressMessage = plugin.configManager.getMessage("recording-progress")
@@ -228,7 +228,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             }
         }.runTaskTimer(plugin, 0L, delay)
 
-        recordingTasks[playerId] = task
+        sessionTasks[playerId] = task
     }
 
     private fun finishRecording(player: Player, name: String, frames: List<CutsceneFrame>) {
@@ -243,15 +243,15 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             ?.replace("{frames}", frames.size.toString()) ?: "§aFinished recording cutscene '$name' with ${frames.size} frames!"
         player.sendMessage(message)
 
-        recordingSessions.remove(playerId)
-        recordingTasks.remove(playerId)
-        recordingFrameCounters.remove(playerId)
+        // Clean up session
+        playerSessions.remove(playerId)
+        sessionTasks.remove(playerId)
     }
 
     override fun playCutscene(player: Player, name: String) {
         val playerId = player.uniqueId
 
-        if (playbackSessions.containsKey(playerId)) {
+        if (playerSessions.containsKey(playerId)) {
             val message = plugin.configManager.getMessage("already-playing")
             player.sendMessage(message)
             return
@@ -271,7 +271,10 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             return
         }
 
-        playbackSessions[playerId] = name
+        // Create playback session
+        val session = PlayerSession.Playback(playerId, name, 0, frames.size)
+        playerSessions[playerId] = session
+
         val message = plugin.configManager.getMessage("cutscene-playing")?.replace("{name}", name) ?: "§aPlaying cutscene '$name'..."
         player.sendMessage(message)
 
@@ -332,9 +335,12 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
 
                 player.teleport(interpolatedLocation)
 
+                // Update session with current frame
+                val currentFrameForDisplay = currentFrameIndex + 1
+                playerSessions[playerId] = session.copy(currentFrame = currentFrameForDisplay)
+
                 // Update progress display
-                val displayFrame = currentFrameIndex + 1
-                val progressText = "<gray>$displayFrame<white>/<gray>${frames.size}"
+                val progressText = "<gray>$currentFrameForDisplay<white>/<gray>${frames.size}"
                 val actionBar = MiniMessage.miniMessage().deserialize(progressText)
                 player.sendActionBar(actionBar)
 
@@ -349,7 +355,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             }
         }.runTaskTimer(plugin, 0L, delay)
 
-        playbackTasks[playerId] = task
+        sessionTasks[playerId] = task
     }
 
     // Pre-loads all chunks needed for a cutscene to prevent lag during playback
@@ -444,8 +450,9 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         val message = plugin.configManager.getMessage("cutscene-playback-finished")?.replace("{name}", name) ?: "§aFinished playing cutscene '$name'!"
         player.sendMessage(message)
 
-        playbackSessions.remove(playerId)
-        playbackTasks.remove(playerId)
+        // Clean up session
+        playerSessions.remove(playerId)
+        sessionTasks.remove(playerId)
     }
 
     override fun deleteCutscene(player: Player, name: String) {
@@ -487,7 +494,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     override fun showCutscenePath(player: Player, name: String) {
         val playerId = player.uniqueId
 
-        if (pathVisualizationTasks.containsKey(playerId)) {
+        if (playerSessions.containsKey(playerId)) {
             val message = plugin.configManager.getMessage("path-already-showing") ?: "§cYou are already visualizing a path!"
             player.sendMessage(message)
             return
@@ -508,6 +515,11 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         }
 
         val durationSeconds = plugin.configManager.config?.getInt("settings.path-visualization.duration", 30) ?: 30
+
+        // Create path visualization session
+        val session = PlayerSession.PathVisualization(playerId, name, durationSeconds)
+        playerSessions[playerId] = session
+
         val message = plugin.configManager.getMessage("showing-path")
             ?.replace("{name}", name)
             ?.replace("{duration}", durationSeconds.toString()) ?: "§aShowing path for '$name' ($durationSeconds seconds)..."
@@ -520,7 +532,8 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             override fun run() {
                 if (tickCounter >= totalTicks) {
                     cancel()
-                    pathVisualizationTasks.remove(playerId)
+                    playerSessions.remove(playerId)
+                    sessionTasks.remove(playerId)
                     return
                 }
 
@@ -560,21 +573,21 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             }
         }.runTaskTimer(plugin, 0L, 5L)
 
-        pathVisualizationTasks[playerId] = task
+        sessionTasks[playerId] = task
     }
 
     override fun cancelRecording(player: Player) {
         val playerId = player.uniqueId
 
-        recordingSessions[playerId]?.let { name ->
-            recordingTasks[playerId]?.cancel()
-            recordingSessions.remove(playerId)
-            recordingTasks.remove(playerId)
-            recordingFrameCounters.remove(playerId)
+        val session = playerSessions[playerId]
+        if (session is PlayerSession.Recording) {
+            sessionTasks[playerId]?.cancel()
+            playerSessions.remove(playerId)
+            sessionTasks.remove(playerId)
 
-            val message = plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cCancelled recording of cutscene '$name'!"
+            val message = plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", session.name) ?: "§cCancelled recording of cutscene '${session.name}'!"
             player.sendMessage(message)
-        } ?: run {
+        } else {
             val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not recording anything."
             player.sendMessage(message)
         }
@@ -583,20 +596,21 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     override fun cancelPlayback(player: Player) {
         val playerId = player.uniqueId
 
-        playbackSessions[playerId]?.let { name ->
-            playbackTasks[playerId]?.cancel()
+        val session = playerSessions[playerId]
+        if (session is PlayerSession.Playback) {
+            sessionTasks[playerId]?.cancel()
 
             // Restore player's game mode
             savedGameModes.remove(playerId)?.let { originalGameMode ->
                 player.gameMode = originalGameMode
             }
 
-            playbackSessions.remove(playerId)
-            playbackTasks.remove(playerId)
+            playerSessions.remove(playerId)
+            sessionTasks.remove(playerId)
 
-            val message = plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cCancelled playback of cutscene '$name'!"
+            val message = plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", session.name) ?: "§cCancelled playback of cutscene '${session.name}'!"
             player.sendMessage(message)
-        } ?: run {
+        } else {
             val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not watching a cutscene."
             player.sendMessage(message)
         }
@@ -605,20 +619,28 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     override fun cancelPathVisualization(player: Player) {
         val playerId = player.uniqueId
 
-        pathVisualizationTasks[playerId]?.let { task ->
-            task.cancel()
-            pathVisualizationTasks.remove(playerId)
+        val session = playerSessions[playerId]
+        if (session is PlayerSession.PathVisualization) {
+            sessionTasks[playerId]?.cancel()
+            playerSessions.remove(playerId)
+            sessionTasks.remove(playerId)
             val message = plugin.configManager.getMessage("path-visualization-cancelled") ?: "§aCancelled path visualization!"
             player.sendMessage(message)
-        } ?: run {
+        } else {
             val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not visualizing any path."
             player.sendMessage(message)
         }
     }
 
-    override fun isRecording(player: Player): Boolean = recordingSessions.containsKey(player.uniqueId)
+    override fun isRecording(player: Player): Boolean {
+        val session = playerSessions[player.uniqueId]
+        return session is PlayerSession.Recording
+    }
 
-    override fun isWatchingCutscene(player: Player): Boolean = playbackSessions.containsKey(player.uniqueId)
+    override fun isWatchingCutscene(player: Player): Boolean {
+        val session = playerSessions[player.uniqueId]
+        return session is PlayerSession.Playback
+    }
 
     override fun getCutsceneNames(): List<String> = cutscenes.keys.toList()
 
@@ -626,44 +648,24 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
 
     override fun cancelAllSessions(player: Player) {
         val playerId = player.uniqueId
-        var cancelledSomething = false
+        val session = playerSessions[playerId]
 
-        // Cancel recording if active
-        if (recordingSessions.containsKey(playerId)) {
-            cancelRecording(player)
-            cancelledSomething = true
-        }
-
-        // Cancel playback if active
-        if (playbackSessions.containsKey(playerId)) {
-            cancelPlayback(player)
-            cancelledSomething = true
-        }
-
-        // Cancel path visualization if active
-        if (pathVisualizationTasks.containsKey(playerId)) {
-            cancelPathVisualization(player)
-            cancelledSomething = true
-        }
-
-        if (!cancelledSomething) {
-            val message = plugin.configManager.getMessage("nothing-to-cancel") ?: "§7Nothing to cancel."
-            player.sendMessage(message)
+        when (session) {
+            is PlayerSession.Recording -> cancelRecording(player)
+            is PlayerSession.Playback -> cancelPlayback(player)
+            is PlayerSession.PathVisualization -> cancelPathVisualization(player)
+            null -> {
+                val message = plugin.configManager.getMessage("nothing-to-cancel") ?: "§7Nothing to cancel."
+                player.sendMessage(message)
+            }
         }
     }
 
 
 
     override fun cleanup() {
-        for (task in recordingTasks.values) {
-            task?.cancel()
-        }
-
-        for (task in playbackTasks.values) {
-            task?.cancel()
-        }
-
-        for (task in pathVisualizationTasks.values) {
+        // Cancel all active session tasks
+        for (task in sessionTasks.values) {
             task?.cancel()
         }
 
@@ -672,12 +674,9 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             saveCutscene(cutscene)
         }
 
-        recordingSessions.clear()
-        recordingTasks.clear()
-        recordingFrameCounters.clear()
-        playbackSessions.clear()
-        playbackTasks.clear()
-        pathVisualizationTasks.clear()
+        // Clear all session data
+        playerSessions.clear()
+        sessionTasks.clear()
         savedInventories.clear()
         savedGameModes.clear()
     }
