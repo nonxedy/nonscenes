@@ -2,14 +2,13 @@ name: nonscenes
 author: nonxedy
 main: com.nonxedy.Nonscenes
 description: Plugin for creation cutscenes 1.20-1.21.10
-version: 05-a
+version: 06-a
 prefix: nonscenes
 api-version: 1.20
 load: STARTUP
 
 depend: 
   - LuckPerms
-  - ProtocolLib
 
 commands:
   nonscene:

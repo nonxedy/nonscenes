@@ -31,7 +31,7 @@ cutscene-list-header: "${prefix}&#f39c12Available cutscenes:"
 cutscene-list-item: "${prefix}&7- &#3498db{name} &7(&#f39c12{frames} frames&7)"
 no-cutscenes: "${prefix}&#e74c3cThere are no cutscenes available."
 
-# Input bpockingblocking messages
+# Input blocking messages
 command-disabled-during-cutscene: "${prefix}&#e74c3cCommands are disabled during cutscene playback."
 
 # Delete messages
