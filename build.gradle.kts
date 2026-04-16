@@ -1,6 +1,7 @@
 plugins {
     kotlin("jvm") version "2.3.0"
     id("java")
+    id("com.gradleup.shadow") version "9.4.1"
 }
 
 group = "com.nonxedy"
@@ -27,6 +28,9 @@ dependencies {
     // LuckPerms API
     compileOnly("net.luckperms:api:5.4")
 
+    // Kotlin runtime
+    implementation(kotlin("stdlib"))
+
     // SnakeYAML for config
     implementation("org.yaml:snakeyaml:2.4")
 
@@ -37,15 +41,10 @@ dependencies {
     implementation("org.apache.commons:commons-lang3:3.18.0")
 
     // Database dependencies
-    // Connection Pooling
     implementation("com.zaxxer:HikariCP:7.0.2")
-
-    // SQL Database Drivers
     implementation("com.mysql:mysql-connector-j:9.5.0")
     implementation("org.postgresql:postgresql:42.7.8")
     implementation("org.xerial:sqlite-jdbc:3.50.3.0")
-
-    // NoSQL Database Drivers
     implementation("org.mongodb:mongodb-driver-sync:5.6.1")
     implementation("redis.clients:jedis:7.0.0")
 }
@@ -58,5 +57,17 @@ tasks {
                 "name" to project.name
             )
         }
+    }
+
+    jar {
+        enabled = false
+    }
+
+    shadowJar {
+        archiveClassifier.set("")
+    }
+
+    build {
+        dependsOn(shadowJar)
     }
 }
