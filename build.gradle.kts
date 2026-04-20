@@ -8,12 +8,12 @@ group = "com.nonxedy"
 version = "06-a"
 
 java {
-    sourceCompatibility = JavaVersion.VERSION_21
-    targetCompatibility = JavaVersion.VERSION_21
+    sourceCompatibility = JavaVersion.VERSION_25
+    targetCompatibility = JavaVersion.VERSION_25
 }
 
 kotlin {
-    jvmToolchain(21)
+    jvmToolchain(25)
 }
 
 repositories {
@@ -23,7 +23,7 @@ repositories {
 
 dependencies {
     // Paper API
-    compileOnly("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
+    compileOnly("io.papermc.paper:paper-api:26.1.2.build.+")
 
     // LuckPerms API
     compileOnly("net.luckperms:api:5.4")
