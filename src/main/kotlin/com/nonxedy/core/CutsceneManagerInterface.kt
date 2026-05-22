@@ -16,6 +16,7 @@ interface CutsceneManagerInterface {
     fun cancelPathVisualization(player: Player)
     fun cancelAllSessions(player: Player)
 
+    fun hasActiveSession(player: Player): Boolean
     fun isRecording(player: Player): Boolean
     fun isWatchingCutscene(player: Player): Boolean
 

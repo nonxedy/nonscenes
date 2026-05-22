@@ -12,9 +12,9 @@ class PlayerStateRestorer(private val plugin: Nonscenes) : Listener {
     fun onPlayerQuit(event: PlayerQuitEvent) {
         val player = event.player
 
-        // If player is watching a cutscene, cancel it to restore state
-        if (plugin.cutsceneManager.isWatchingCutscene(player)) {
-            plugin.cutsceneManager.cancelPlayback(player)
+        // Cancel any active session so recording/showpath tasks do not leak after disconnect.
+        if (plugin.cutsceneManager.hasActiveSession(player)) {
+            plugin.cutsceneManager.cancelAllSessions(player)
         }
     }
 

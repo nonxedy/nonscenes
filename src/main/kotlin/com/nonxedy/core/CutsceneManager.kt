@@ -795,6 +795,8 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         return session is PlayerSession.Recording
     }
 
+    override fun hasActiveSession(player: Player): Boolean = playerSessions.containsKey(player.uniqueId)
+
     override fun isWatchingCutscene(player: Player): Boolean {
         val session = playerSessions[player.uniqueId]
         return session is PlayerSession.Playback
