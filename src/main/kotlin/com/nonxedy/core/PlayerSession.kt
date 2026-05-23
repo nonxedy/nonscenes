@@ -7,6 +7,13 @@ sealed class PlayerSession {
     abstract val playerId: UUID
     abstract val name: String
 
+    data class RecordingCountdown(
+        override val playerId: UUID,
+        override val name: String,
+        val totalFrames: Int,
+        val secondsRemaining: Int
+    ) : PlayerSession()
+
     data class Recording(
         override val playerId: UUID,
         override val name: String,
@@ -28,6 +35,7 @@ sealed class PlayerSession {
 
     // Returns a user-friendly description of the session
     fun getDescription(): String = when (this) {
+        is RecordingCountdown -> "waiting to record cutscene '$name' ($secondsRemaining seconds remaining)"
         is Recording -> "recording cutscene '$name' ($frameCount frames)"
         is Playback -> "watching cutscene '$name' ($currentFrame/$totalFrames)"
         is PathVisualization -> "visualizing path for '$name' ($duration seconds)"

@@ -269,24 +269,38 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             ?.replace("{seconds}", countdownSeconds.toString())
             ?: "§aRecording will start in $countdownSeconds seconds..."
         player.sendMessage(countdownMessage)
+        playerSessions[playerId] = PlayerSession.RecordingCountdown(playerId, name, frames, countdownSeconds)
 
-        object : BukkitRunnable() {
+        val task = object : BukkitRunnable() {
             var seconds = countdownSeconds
 
             override fun run() {
+                if (!player.isOnline || playerSessions[playerId] !is PlayerSession.RecordingCountdown) {
+                    cancel()
+                    sessionTasks.remove(playerId)
+                    return
+                }
+
                 if (seconds > 0) {
+                    playerSessions[playerId] = PlayerSession.RecordingCountdown(playerId, name, frames, seconds)
                     val countdownTickMessage = plugin.configManager.getMessage("countdown")?.replace("{seconds}", seconds.toString()) ?: "§e$seconds..."
                     player.sendMessage(countdownTickMessage)
                     seconds--
                 } else {
                     cancel()
+                    sessionTasks.remove(playerId)
                     startRecordingProcess(player, name, frames)
                 }
             }
         }.runTaskTimer(plugin, 0L, 20L)
+        sessionTasks[playerId] = task
     }
 
     private fun startRecordingProcess(player: Player, name: String, totalFrames: Int) {
+        if (!player.isOnline) {
+            return
+        }
+
         val playerId = player.uniqueId
         val frames = mutableListOf<CutsceneFrame>()
 
@@ -731,7 +745,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         val playerId = player.uniqueId
 
         val session = playerSessions[playerId]
-        if (session is PlayerSession.Recording) {
+        if (session is PlayerSession.RecordingCountdown || session is PlayerSession.Recording) {
             sessionTasks[playerId]?.cancel()
             playerSessions.remove(playerId)
             sessionTasks.remove(playerId)
@@ -781,7 +795,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
 
     override fun isRecording(player: Player): Boolean {
         val session = playerSessions[player.uniqueId]
-        return session is PlayerSession.Recording
+        return session is PlayerSession.RecordingCountdown || session is PlayerSession.Recording
     }
 
     override fun hasActiveSession(player: Player): Boolean = playerSessions.containsKey(player.uniqueId)
@@ -813,6 +827,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         val session = playerSessions[playerId]
 
         when (session) {
+            is PlayerSession.RecordingCountdown -> cancelRecording(player)
             is PlayerSession.Recording -> cancelRecording(player)
             is PlayerSession.Playback -> cancelPlayback(player)
             is PlayerSession.PathVisualization -> cancelPathVisualization(player)
