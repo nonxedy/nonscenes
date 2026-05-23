@@ -551,25 +551,27 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     private fun finishPlayback(player: Player, name: String, originalLocation: Location) {
         val playerId = player.uniqueId
 
-        // Restore player's game mode
-        val savedGameMode = savedGameModes.remove(playerId)
-        if (savedGameMode != null) {
-            player.gameMode = savedGameMode
-        }
-
-        // Ensure the original location chunk is loaded before teleporting back
-        if (!originalLocation.world.isChunkLoaded(originalLocation.blockX shr 4, originalLocation.blockZ shr 4)) {
-            originalLocation.world.loadChunk(originalLocation.blockX shr 4, originalLocation.blockZ shr 4, true)
-        }
-
-        player.teleport(originalLocation)
-        savedLocations.remove(playerId)
+        restorePlaybackState(playerId, player, originalLocation)
         val message = plugin.configManager.getMessage("cutscene-playback-finished")?.replace("{name}", name) ?: "§aFinished playing cutscene '$name'!"
         player.sendMessage(message)
 
         // Clean up session
         playerSessions.remove(playerId)
         sessionTasks.remove(playerId)
+    }
+
+    private fun restorePlaybackState(playerId: UUID, player: Player, fallbackLocation: Location? = null) {
+        savedGameModes.remove(playerId)?.let { originalGameMode ->
+            player.gameMode = originalGameMode
+        }
+
+        val originalLocation = savedLocations.remove(playerId) ?: fallbackLocation
+        if (originalLocation != null) {
+            if (!originalLocation.world.isChunkLoaded(originalLocation.blockX shr 4, originalLocation.blockZ shr 4)) {
+                originalLocation.world.loadChunk(originalLocation.blockX shr 4, originalLocation.blockZ shr 4, true)
+            }
+            player.teleport(originalLocation)
+        }
     }
 
     override fun deleteCutscene(player: Player, name: String) {
@@ -748,20 +750,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         val session = playerSessions[playerId]
         if (session is PlayerSession.Playback) {
             sessionTasks[playerId]?.cancel()
-
-            // Restore player's game mode
-            savedGameModes.remove(playerId)?.let { originalGameMode ->
-                player.gameMode = originalGameMode
-            }
-
-            // Teleport back to original location if saved
-            savedLocations.remove(playerId)?.let { originalLocation ->
-                // Ensure the original location chunk is loaded before teleporting back
-                if (!originalLocation.world.isChunkLoaded(originalLocation.blockX shr 4, originalLocation.blockZ shr 4)) {
-                    originalLocation.world.loadChunk(originalLocation.blockX shr 4, originalLocation.blockZ shr 4, true)
-                }
-                player.teleport(originalLocation)
-            }
+            restorePlaybackState(playerId, player)
 
             playerSessions.remove(playerId)
             sessionTasks.remove(playerId)
@@ -840,6 +829,15 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         // Cancel all active session tasks
         for (task in sessionTasks.values) {
             task?.cancel()
+        }
+
+        // Restore online players still watching a cutscene before clearing session state
+        for ((playerId, session) in playerSessions) {
+            if (session is PlayerSession.Playback) {
+                Bukkit.getPlayer(playerId)?.let { player ->
+                    restorePlaybackState(playerId, player)
+                }
+            }
         }
 
         // Save all cutscenes
