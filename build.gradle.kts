@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.nonxedy"
-version = "06-a"
+version = "07-a"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
