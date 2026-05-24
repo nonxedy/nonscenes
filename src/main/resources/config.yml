@@ -1,10 +1,10 @@
 # nonscenes configuration
 
 settings:
-  # Frames per second for recording and playback (default: 30)
-  # Higher values mean smoother cutscenes but more server load
-  # Recommended: 10-30 FPS for smooth playback
-  frames-per-second: 30
+  # Frames per second for recording and playback (default: 20)
+  # Bukkit updates on a 20 TPS tick rate, so values above 20 are clamped
+  # Recommended: 10-20 FPS for accurate recording and playback
+  frames-per-second: 20
   
   # Countdown seconds before recording starts
   countdown-seconds: 3

@@ -18,7 +18,8 @@ class PostgreSQLCutsceneDatabaseService(
         CREATE TABLE IF NOT EXISTS cutscenes (
             name VARCHAR(255) PRIMARY KEY,
             frame_count INTEGER NOT NULL,
-            ticks_per_frame INTEGER NOT NULL DEFAULT 1
+            ticks_per_frame INTEGER NOT NULL DEFAULT 1,
+            frame_duration_ms BIGINT NOT NULL DEFAULT 50
         )
         """.trimIndent(),
 

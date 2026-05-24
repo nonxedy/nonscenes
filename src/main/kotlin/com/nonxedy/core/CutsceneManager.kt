@@ -30,9 +30,8 @@ import java.io.IOException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Level
-import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.roundToInt
+import kotlin.math.roundToLong
 
 class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface {
     private val databaseService: CutsceneDatabaseService
@@ -164,7 +163,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
 
                 val frames = mutableListOf<CutsceneFrame>()
                 val framesSection: ConfigurationSection? = config.getConfigurationSection("frames")
-                val ticksPerFrame = config.getInt("ticks-per-frame", getConfiguredTicksPerFrame())
+                val frameDurationMs = loadFrameDurationMs(config)
 
                 if (framesSection != null) {
                     for (key in framesSection.getKeys(false)) {
@@ -186,7 +185,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
                 }
 
                 if (frames.isNotEmpty()) {
-                    val cutscene = Cutscene(name, frames, ticksPerFrame)
+                    val cutscene = Cutscene(name, frames, frameDurationMs)
                     cutscenes[name.lowercase()] = cutscene
                     fileCount++
 
@@ -226,6 +225,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         val config = YamlConfiguration()
 
         config.set("name", cutscene.name)
+        config.set("frame-duration-ms", cutscene.frameDurationMs)
         config.set("ticks-per-frame", cutscene.ticksPerFrame)
 
         val frames = cutscene.frames
@@ -312,41 +312,45 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         player.sendMessage(message)
 
         val framesPerSecond = getConfiguredFramesPerSecond()
-        val ticksPerFrame = getTicksPerFrame(framesPerSecond)
-        val delay = ticksPerFrame.toLong()
+        val frameDurationMs = getFrameDurationMs(framesPerSecond)
 
         val task = object : BukkitRunnable() {
             var frameCount = 0
+            var nextFrameAtMs = System.currentTimeMillis()
 
             override fun run() {
                 if (frameCount >= totalFrames) {
-                    finishRecording(player, name, frames, ticksPerFrame)
+                    finishRecording(player, name, frames, frameDurationMs)
                     cancel()
                     return
                 }
 
-                frames.add(CutsceneFrame(player.location.clone()))
-                frameCount++
+                val now = System.currentTimeMillis()
+                while (frameCount < totalFrames && now >= nextFrameAtMs) {
+                    frames.add(CutsceneFrame(player.location.clone()))
+                    frameCount++
+                    nextFrameAtMs += frameDurationMs
 
-                // Update session with current frame count
-                playerSessions[playerId] = session.copy(frameCount = frameCount)
+                    // Update session with current frame count
+                    playerSessions[playerId] = session.copy(frameCount = frameCount)
 
-                if (frameCount % framesPerSecond == 0 || frameCount == totalFrames) {
-                    val progressMessage = plugin.configManager.getMessage("recording-progress")
+                    if (frameCount % framesPerSecond == 0 || frameCount == totalFrames) {
+                        val progressMessage = plugin.configManager.getMessage("recording-progress")
                         ?.replace("{current}", frameCount.toString())
                         ?.replace("{total}", totalFrames.toString()) ?: "§7Recorded $frameCount/$totalFrames frames"
-                    player.sendMessage(progressMessage)
+                        player.sendMessage(progressMessage)
+                    }
                 }
             }
-        }.runTaskTimer(plugin, 0L, delay)
+        }.runTaskTimer(plugin, 0L, 1L)
 
         sessionTasks[playerId] = task
     }
 
-    private fun finishRecording(player: Player, name: String, frames: List<CutsceneFrame>, ticksPerFrame: Int) {
+    private fun finishRecording(player: Player, name: String, frames: List<CutsceneFrame>, frameDurationMs: Long) {
         val playerId = player.uniqueId
 
-        val cutscene = Cutscene(name, frames, ticksPerFrame)
+        val cutscene = Cutscene(name, frames, frameDurationMs)
         cutscenes[name.lowercase()] = cutscene
         try {
             saveCutscene(cutscene)
@@ -410,7 +414,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         preloadChunksAsync(resolvedFrames)
 
         // The duration of one keyframe is fixed at record time and stored with the cutscene
-        val frameDurationMs = cutscene.ticksPerFrame.coerceAtLeast(1) * 50L
+        val frameDurationMs = cutscene.frameDurationMs.coerceAtLeast(1L)
         val totalDurationMs = frameDurationMs * (frames.size - 1)
 
         val startTime = System.currentTimeMillis()
@@ -810,16 +814,26 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     override fun getCutscene(name: String): Cutscene? = cutscenes[name.lowercase()]
 
     private fun getConfiguredFramesPerSecond(): Int {
-        return plugin.configManager.config?.getInt("settings.frames-per-second", 30) ?: 30
+        val configuredFps = plugin.configManager.config?.getInt("settings.frames-per-second", 20) ?: 20
+        if (configuredFps > 20) {
+            plugin.logger.warning("settings.frames-per-second=$configuredFps exceeds the Bukkit tick rate; using 20 FPS.")
+        }
+        return configuredFps.coerceIn(1, 20)
     }
 
-    private fun getConfiguredTicksPerFrame(): Int {
-        return getTicksPerFrame(getConfiguredFramesPerSecond())
+    private fun loadFrameDurationMs(config: FileConfiguration): Long {
+        val storedFrameDurationMs = config.getLong("frame-duration-ms", -1L)
+        if (storedFrameDurationMs > 0L) {
+            return storedFrameDurationMs
+        }
+
+        val legacyTicksPerFrame = config.getInt("ticks-per-frame", 1).coerceAtLeast(1)
+        return legacyTicksPerFrame * 50L
     }
 
-    private fun getTicksPerFrame(framesPerSecond: Int): Int {
+    private fun getFrameDurationMs(framesPerSecond: Int): Long {
         val safeFps = framesPerSecond.coerceAtLeast(1)
-        return max(1, (20.0 / safeFps).roundToInt())
+        return (1000.0 / safeFps).roundToLong().coerceAtLeast(1L)
     }
 
     override fun cancelAllSessions(player: Player) {

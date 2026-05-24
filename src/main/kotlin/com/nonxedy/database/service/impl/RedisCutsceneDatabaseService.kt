@@ -63,6 +63,7 @@ class RedisCutsceneDatabaseService(
                 // Store cutscene metadata
                 jedis.hset(key, "name", cutscene.name)
                 jedis.hset(key, "frameCount", cutscene.frames.size.toString())
+                jedis.hset(key, "frameDurationMs", cutscene.frameDurationMs.toString())
                 jedis.hset(key, "ticksPerFrame", cutscene.ticksPerFrame.toString())
 
                 // Store frames
@@ -97,6 +98,7 @@ class RedisCutsceneDatabaseService(
                     val name = jedis.hget(key, "name")
                     val frameCountStr = jedis.hget(key, "frameCount")
                     val ticksPerFrame = (jedis.hget(key, "ticksPerFrame")?.toIntOrNull() ?: 1).coerceAtLeast(1)
+                    val frameDurationMs = (jedis.hget(key, "frameDurationMs")?.toLongOrNull() ?: (ticksPerFrame * 50L)).coerceAtLeast(1L)
 
                     if (name != null && frameCountStr != null) {
                         val frameCount = frameCountStr.toIntOrNull() ?: 0
@@ -132,7 +134,7 @@ class RedisCutsceneDatabaseService(
                         }
 
                         if (frames.isNotEmpty()) {
-                            cutscenes.add(Cutscene(name, frames, ticksPerFrame))
+                            cutscenes.add(Cutscene(name, frames, frameDurationMs))
                         }
                     }
                 }
