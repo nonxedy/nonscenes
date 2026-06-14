@@ -42,6 +42,10 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     private val savedInventories = ConcurrentHashMap<UUID, Array<ItemStack?>>()
     private val savedGameModes = ConcurrentHashMap<UUID, GameMode>()
     private val savedLocations = ConcurrentHashMap<UUID, Location>()
+    private val savedWalkSpeeds = ConcurrentHashMap<UUID, Float>()
+    private val savedFlySpeeds = ConcurrentHashMap<UUID, Float>()
+    private val savedVisibility = ConcurrentHashMap<UUID, Boolean>()
+    private val savedInvulnerability = ConcurrentHashMap<UUID, Boolean>()
     private val cutsceneFolder = File(plugin.dataFolder, "cutscenes")
 
     init {
@@ -407,6 +411,30 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         savedLocations[playerId] = player.location.clone()
         player.gameMode = GameMode.SPECTATOR
 
+        val cfg = plugin.configManager.config
+
+        // hide-player
+        if (cfg?.getBoolean("settings.playback.hide-player", true) != false) {
+            savedVisibility[playerId] = true
+            Bukkit.getOnlinePlayers().forEach { viewer ->
+                if (viewer != player) viewer.hidePlayer(plugin, player)
+            }
+        }
+
+        // invulnerable
+        if (cfg?.getBoolean("settings.playback.invulnerable", true) != false) {
+            savedInvulnerability[playerId] = true
+            player.isInvulnerable = true
+        }
+
+        // disable-input
+        if (cfg?.getBoolean("settings.playback.disable-input", true) != false) {
+            savedWalkSpeeds[playerId] = player.walkSpeed
+            savedFlySpeeds[playerId] = player.flySpeed
+            player.walkSpeed = 0f
+            player.flySpeed = 0f
+        }
+
         // Teleport immediately to the start and teleport until the chunks are fully loaded
         player.teleport(resolvedFrames[0])
 
@@ -579,6 +607,22 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     }
 
     private fun restorePlaybackState(playerId: UUID, player: Player, fallbackLocation: Location? = null) {
+        // hide-player
+        if (savedVisibility.remove(playerId) != null) {
+            Bukkit.getOnlinePlayers().forEach { viewer ->
+                if (viewer != player) viewer.showPlayer(plugin, player)
+            }
+        }
+
+        // invulnerable
+        if (savedInvulnerability.remove(playerId) != null) {
+            player.isInvulnerable = false
+        }
+
+        // disable-input
+        savedWalkSpeeds.remove(playerId)?.let { player.walkSpeed = it }
+        savedFlySpeeds.remove(playerId)?.let { player.flySpeed = it }
+
         savedGameModes.remove(playerId)?.let { originalGameMode ->
             player.gameMode = originalGameMode
         }
@@ -668,6 +712,22 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
 
         val durationSeconds = plugin.configManager.config?.getInt("settings.path-visualization.duration", 30) ?: 30
 
+        // Resolve particle type from config
+        val particleName = plugin.configManager.config
+            ?.getString("settings.path-visualization.particle", "END_ROD")
+            ?.replace(" ", "_")
+            ?.uppercase() ?: "END_ROD"
+
+        val pathParticle = try {
+            Particle.valueOf(particleName)
+        } catch (e: IllegalArgumentException) {
+            plugin.logger.warning("Invalid particle '$particleName' in config, using END_ROD")
+            Particle.END_ROD
+        }
+
+        val spacing = plugin.configManager.config
+            ?.getDouble("settings.path-visualization.spacing", 0.5) ?: 0.5
+
         // Create path visualization session
         val session = PlayerSession.PathVisualization(playerId, name, durationSeconds)
         playerSessions[playerId] = session
@@ -712,11 +772,11 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
                     while (d < distance) {
                         val point = start.toVector().add(direction.clone().multiply(d))
                         start.world.spawnParticle(
-                            Particle.END_ROD,
+                            pathParticle,
                             point.x, point.y, point.z,
                             1, 0.0, 0.0, 0.0, 0.0
                         )
-                        d += 0.5
+                        d += spacing
                     }
                 }
 
@@ -888,5 +948,9 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         savedInventories.clear()
         savedGameModes.clear()
         savedLocations.clear()
+        savedWalkSpeeds.clear()
+        savedFlySpeeds.clear()
+        savedVisibility.clear()
+        savedInvulnerability.clear()
     }
 }

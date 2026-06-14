@@ -5,10 +5,10 @@ settings:
   # Bukkit updates on a 20 TPS tick rate, so values above 20 are clamped
   # Recommended: 10-20 FPS for accurate recording and playback
   frames-per-second: 20
-  
+
   # Countdown seconds before recording starts
   countdown-seconds: 3
-  
+
   # Particle settings for path visualization
   path-visualization:
     # Particle type (REDSTONE, FLAME, END_ROD, etc.)
@@ -17,7 +17,7 @@ settings:
     duration: 30
     # Interval between particles (in blocks)
     spacing: 0.5
-    
+
   # Playback settings
   playback:
     # Whether to hide the player during cutscene playback
@@ -26,10 +26,7 @@ settings:
     invulnerable: true
     # Whether to disable player input during cutscene playback
     disable-input: true
-    # Number of interpolation steps between frames (higher = smoother, but more CPU)
-    # Recommended: 5-20 for smooth playback
-    interpolation-steps: 10
-    
+
 storage:
   # Storage type: SQLITE, MYSQL, POSTGRESQL, MONGODB, REDIS
   # SQLITE - Store files in cutscenes.db (recommended for dafault servers)
