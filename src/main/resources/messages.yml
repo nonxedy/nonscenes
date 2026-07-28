@@ -5,8 +5,8 @@ prefix: "&8[&#3498db&lnonscenes&8] &r"
 # Command messages
 player-only-command: "${prefix}&#e74c3cThis command can only be used by players."
 no-permission: "${prefix}&#e74c3cYou don't have permission to use this command."
-invalid-start-args: "${prefix}&#e74c3cUsage: /nonscene start <name> <frames>"
-invalid-frames-number: "${prefix}&#e74c3cFrames must be a positive number."
+invalid-start-args: "${prefix}&#e74c3cUsage: /nonscene start <name> <seconds>"
+invalid-duration: "${prefix}&#e74c3cDuration must be a positive number of seconds (1–300)."
 specify-cutscene-name: "${prefix}&#e74c3cPlease specify a cutscene name."
 
 # Recording messages
@@ -48,7 +48,8 @@ nothing-to-cancel: "${prefix}&#e74c3cYou have no active recording, playback, or 
 # Help messages
 help-messages:
   - "&8&m-----&r &#3498db&lNonScenes Commands &8&m-----"
-  - "&#3498db/nonscene start <name> <frames> &7- Start recording a cutscene"
+  - "&#3498db/nonscene start <name> <seconds> &7- Start recording a cutscene"
+  - "&#3498db/nonscene create <name> <seconds> &7- Alias for start"
   - "&#3498db/nonscene stop &7- Cancel recording/playback"
   - "&#3498db/nonscene delete <name> &7- Delete a cutscene"
   - "&#3498db/nonscene all &7- List all cutscenes"

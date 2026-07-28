@@ -1,9 +1,10 @@
 package com.nonxedy.core
 
+import com.nonxedy.model.playback.PlaybackSettings
+import com.nonxedy.model.recording.RecordingSettings
 import net.kyori.adventure.text.Component
 import org.bukkit.configuration.file.FileConfiguration
 
-// Interface for configuration management functionality
 interface ConfigManagerInterface {
     val config: FileConfiguration?
 
@@ -17,4 +18,7 @@ interface ConfigManagerInterface {
     fun getMessageList(path: String): List<String>
     fun getMessageComponentList(path: String): List<Component>
     fun getHelpMessages(): List<String>
+
+    fun getPlaybackSettings(): PlaybackSettings
+    fun getRecordingSettings(): RecordingSettings
 }

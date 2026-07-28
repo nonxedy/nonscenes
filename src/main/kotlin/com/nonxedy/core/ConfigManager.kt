@@ -1,8 +1,13 @@
 package com.nonxedy.core
 
 import com.nonxedy.Nonscenes
+import com.nonxedy.model.playback.InterpolationType
+import com.nonxedy.model.playback.PlaybackSettings
+import com.nonxedy.model.recording.RecordingSettings
 import com.nonxedy.util.ColorUtil
 import net.kyori.adventure.text.Component
+import org.bukkit.boss.BarColor
+import org.bukkit.boss.BarStyle
 import org.bukkit.configuration.file.FileConfiguration
 import org.bukkit.configuration.file.YamlConfiguration
 import java.io.File
@@ -20,12 +25,10 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
     private var messagesFile: File? = null
 
     override fun loadConfigs() {
-        // Create plugin directory if it doesn't exist
         if (!plugin.dataFolder.exists()) {
             plugin.dataFolder.mkdirs()
         }
 
-        // Load config.yml
         val configFileLocal = File(plugin.dataFolder, "config.yml")
         configFile = configFileLocal
         if (!configFileLocal.exists()) {
@@ -33,14 +36,12 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
         }
         config = YamlConfiguration.loadConfiguration(configFileLocal)
 
-        // Check for missing values in config.yml and add defaults
         var configUpdated = false
         val defaultConfigStream = plugin.getResource("config.yml")
         if (defaultConfigStream != null) {
             val defaultConfig = YamlConfiguration.loadConfiguration(
                 InputStreamReader(defaultConfigStream, StandardCharsets.UTF_8)
             )
-
             for (key in defaultConfig.getKeys(true)) {
                 if (!requireNotNull(config).contains(key)) {
                     requireNotNull(config).set(key, defaultConfig.get(key))
@@ -48,7 +49,6 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
                 }
             }
         }
-
         if (configUpdated) {
             try {
                 config?.save(requireNotNull(configFile) { "Config file is null" })
@@ -57,7 +57,6 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
             }
         }
 
-        // Load messages.yml
         val messagesFileLocal = File(plugin.dataFolder, "messages.yml")
         messagesFile = messagesFileLocal
         if (!messagesFileLocal.exists()) {
@@ -65,14 +64,12 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
         }
         messages = YamlConfiguration.loadConfiguration(messagesFileLocal)
 
-        // Check for missing values in messages.yml and add defaults
         var messagesUpdated = false
         val defaultMessagesStream = plugin.getResource("messages.yml")
         if (defaultMessagesStream != null) {
             val defaultMessages = YamlConfiguration.loadConfiguration(
                 InputStreamReader(defaultMessagesStream, StandardCharsets.UTF_8)
             )
-
             for (key in defaultMessages.getKeys(true)) {
                 if (!requireNotNull(messages).contains(key)) {
                     requireNotNull(messages).set(key, defaultMessages.get(key))
@@ -80,7 +77,6 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
                 }
             }
         }
-
         if (messagesUpdated) {
             try {
                 messages?.save(requireNotNull(messagesFile) { "Messages file is null" })
@@ -90,50 +86,39 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
         }
     }
 
-    // Gets a message from messages.yml and formats it with color codes.
     override fun getMessage(path: String): String {
         var message = messages?.getString(path, "Missing message: $path") ?: "Missing message: $path"
-
         if (message.contains("\${prefix}")) {
             val prefix = messages?.getString("prefix", "&8[&bnonscenes&8] &r") ?: "&8[&bnonscenes&8] &r"
             message = message.replace("\${prefix}", prefix)
         }
-
         return ColorUtil.format(message)
     }
 
-    // Gets a message from messages.yml as a Component for modern messaging
     override fun getMessageComponent(path: String): Component {
         var message = messages?.getString(path, "Missing message: $path") ?: "Missing message: $path"
-
         if (message.contains("\${prefix}")) {
             val prefix = messages?.getString("prefix", "&8[&bnonscenes&8] &r") ?: "&8[&bnonscenes&8] &r"
             message = message.replace("\${prefix}", prefix)
         }
-
         return ColorUtil.toComponent(message)
     }
 
-    // Gets a list of messages from messages.yml and formats them with color codes.
     override fun getMessageList(path: String): List<String> {
         val messageList = messages?.getStringList(path) ?: emptyList()
         return messageList.map { ColorUtil.format(it) }
     }
 
-    // Gets a list of messages from messages.yml as Kyori Components.
     override fun getMessageComponentList(path: String): List<Component> {
         val messageList = messages?.getStringList(path) ?: emptyList()
         return messageList.map { ColorUtil.toComponent(it) }
     }
 
-    // Gets the help messages from messages.yml.
     override fun getHelpMessages(): List<String> = getMessageList("help-messages")
 
     override fun reloadConfigs() {
         config = configFile?.let { YamlConfiguration.loadConfiguration(it) }
         messages = messagesFile?.let { YamlConfiguration.loadConfiguration(it) }
-
-        // Load defaults if available
         val defaultConfigStream = plugin.getResource("config.yml")
         if (defaultConfigStream != null) {
             val defaultConfig = YamlConfiguration.loadConfiguration(
@@ -141,7 +126,6 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
             )
             config?.setDefaults(defaultConfig)
         }
-
         val defaultMessagesStream = plugin.getResource("messages.yml")
         if (defaultMessagesStream != null) {
             val defaultMessages = YamlConfiguration.loadConfiguration(
@@ -169,5 +153,38 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
         } catch (e: IOException) {
             plugin.logger.log(Level.SEVERE, "Could not save messages to $messagesFile", e)
         }
+    }
+
+    override fun getPlaybackSettings(): PlaybackSettings {
+        val cfg = config ?: return PlaybackSettings()
+        val interpolation = runCatching {
+            InterpolationType.valueOf(cfg.getString("cutscene.playback.interpolation", "CATMULL_ROM")!!.uppercase())
+        }.getOrDefault(InterpolationType.CATMULL_ROM)
+
+        return PlaybackSettings(
+            updateRate = cfg.getInt("cutscene.playback.update-rate", 60).coerceIn(20, 240),
+            interpolation = interpolation,
+            smoothRotation = cfg.getBoolean("cutscene.playback.smooth-rotation", true),
+            bakePath = cfg.getBoolean("cutscene.playback.bake-path", true)
+        )
+    }
+
+    override fun getRecordingSettings(): RecordingSettings {
+        val cfg = config ?: return RecordingSettings()
+        val color = runCatching {
+            BarColor.valueOf(cfg.getString("cutscene.creation.progress-bar.color", "BLUE")!!.uppercase())
+        }.getOrDefault(BarColor.BLUE)
+
+        val style = runCatching {
+            BarStyle.valueOf(cfg.getString("cutscene.creation.progress-bar.style", "SOLID")!!.uppercase())
+        }.getOrDefault(BarStyle.SOLID)
+
+        return RecordingSettings(
+            progressBarEnabled = cfg.getBoolean("cutscene.creation.progress-bar.enabled", true),
+            barStyle = style,
+            barColor = color,
+            updateEveryNFrames = cfg.getInt("cutscene.creation.progress-bar.update-every-n-frames", 1).coerceAtLeast(1),
+            captureIntervalTicks = cfg.getInt("cutscene.recording.capture-interval-ticks", 1).coerceAtLeast(1)
+        )
     }
 }

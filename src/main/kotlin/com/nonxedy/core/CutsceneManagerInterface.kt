@@ -3,9 +3,8 @@ package com.nonxedy.core
 import com.nonxedy.model.Cutscene
 import org.bukkit.entity.Player
 
-// Interface for cutscene management functionality
 interface CutsceneManagerInterface {
-    fun startRecording(player: Player, name: String, frames: Int)
+    fun startRecording(player: Player, name: String, seconds: Int)
     fun playCutscene(player: Player, name: String)
     fun deleteCutscene(player: Player, name: String)
     fun listAllCutscenes(player: Player)

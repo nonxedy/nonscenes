@@ -9,6 +9,7 @@ load: POSTWORLD
 
 depend: 
   - LuckPerms
+  - packetevents
 
 commands:
   nonscene:
