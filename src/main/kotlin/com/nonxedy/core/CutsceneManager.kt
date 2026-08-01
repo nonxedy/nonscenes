@@ -61,10 +61,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         }
     }
 
-    // ------------------------------------------------------------------
     // Database / File bootstrap
-    // ------------------------------------------------------------------
-
     private fun createDatabaseService(): CutsceneDatabaseService {
         val config = plugin.configManager.config
         val typeName = config?.getString("storage.type")?.uppercase(Locale.ROOT) ?: DatabaseType.SQLITE.name
@@ -204,10 +201,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         return legacy * 50L
     }
 
-    // ------------------------------------------------------------------
     // Recording
-    // ------------------------------------------------------------------
-
     override fun startRecording(player: Player, name: String, frames: Int) {
         val playerId = player.uniqueId
         if (playerSessions.containsKey(playerId)) {
@@ -290,10 +284,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         recorder.start(player, name, totalFrames)
     }
 
-    // ------------------------------------------------------------------
-    // Playback (ASYNC_PACKET only — no Spectator, no state restore)
-    // ------------------------------------------------------------------
-
+    // Playback
     override fun playCutscene(player: Player, name: String) {
         val playerId = player.uniqueId
         if (playerSessions.containsKey(playerId)) {
@@ -403,10 +394,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         plugin.logger.info("Preloading ${chunks.size} chunks for cutscene...")
     }
 
-    // ------------------------------------------------------------------
     // Path visualization
-    // ------------------------------------------------------------------
-
     override fun showCutscenePath(player: Player, name: String) {
         val playerId = player.uniqueId
         if (playerSessions.containsKey(playerId)) {
@@ -462,10 +450,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         sessionTasks[playerId] = task
     }
 
-    // ------------------------------------------------------------------
     // Deletion / Listing
-    // ------------------------------------------------------------------
-
     override fun deleteCutscene(player: Player, name: String) {
         val normalized = name.lowercase()
         val cutscene = cutscenes[normalized]
@@ -506,10 +491,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         }
     }
 
-    // ------------------------------------------------------------------
     // Cancellation
-    // ------------------------------------------------------------------
-
     override fun cancelRecording(player: Player) {
         val playerId = player.uniqueId
         val session = playerSessions[playerId]
@@ -556,10 +538,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         }
     }
 
-    // ------------------------------------------------------------------
     // Queries
-    // ------------------------------------------------------------------
-
     override fun isRecording(player: Player): Boolean {
         return when (playerSessions[player.uniqueId]) {
             is PlayerSession.RecordingCountdown, is PlayerSession.Recording -> true
@@ -572,10 +551,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     override fun getCutsceneNames(): List<String> = cutscenes.keys.toList()
     override fun getCutscene(name: String): Cutscene? = cutscenes[name.lowercase()]
 
-    // ------------------------------------------------------------------
     // Helpers
-    // ------------------------------------------------------------------
-
     private fun resolveFrameLocations(frames: List<CutsceneFrame>): List<Location>? {
         return frames.map { it.resolveLocation() ?: return null }
     }

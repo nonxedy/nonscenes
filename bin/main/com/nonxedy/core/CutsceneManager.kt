@@ -2,698 +2,577 @@ package com.nonxedy.core
 
 import com.nonxedy.Nonscenes
 import com.nonxedy.database.service.CutsceneDatabaseService
+import com.nonxedy.database.service.DatabaseType
+import com.nonxedy.database.service.impl.MongoDBCutsceneDatabaseService
+import com.nonxedy.database.service.impl.MySQLCutsceneDatabaseService
+import com.nonxedy.database.service.impl.PostgreSQLCutsceneDatabaseService
+import com.nonxedy.database.service.impl.RedisCutsceneDatabaseService
 import com.nonxedy.database.service.impl.SQLiteCutsceneDatabaseService
+import com.nonxedy.interpolator.BezierPathInterpolator
+import com.nonxedy.interpolator.CatmullRomPathInterpolator
+import com.nonxedy.interpolator.LinearPathInterpolator
+import com.nonxedy.interpolator.PathInterpolator
 import com.nonxedy.model.Cutscene
 import com.nonxedy.model.CutsceneFrame
-import com.nonxedy.util.ColorUtil
-import net.kyori.adventure.text.Component
+import com.nonxedy.model.playback.InterpolationType
+import com.nonxedy.model.playback.PlaybackSettings
+import com.nonxedy.playback.AsyncPacketPlaybackController
+import com.nonxedy.playback.CutscenePlaybackController
+import com.nonxedy.playback.PathBaker
+import com.nonxedy.recording.CutsceneRecorder
 import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Bukkit
-import org.bukkit.GameMode
 import org.bukkit.Location
 import org.bukkit.Particle
-import org.bukkit.configuration.ConfigurationSection
 import org.bukkit.configuration.file.FileConfiguration
 import org.bukkit.configuration.file.YamlConfiguration
 import org.bukkit.entity.Player
-import org.bukkit.inventory.ItemStack
 import org.bukkit.scheduler.BukkitRunnable
 import org.bukkit.scheduler.BukkitTask
-import org.bukkit.util.Vector
 import java.io.File
 import java.io.IOException
 import java.util.*
 import java.util.concurrent.ConcurrentHashMap
 import java.util.logging.Level
-import kotlin.math.max
-import kotlin.math.min
 
 class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface {
+
     private val databaseService: CutsceneDatabaseService
+    private var persistentStorageEnabled: Boolean
     private val cutscenes = mutableMapOf<String, Cutscene>()
     private val playerSessions = ConcurrentHashMap<UUID, PlayerSession>()
     private val sessionTasks = ConcurrentHashMap<UUID, BukkitTask>()
-    private val savedInventories = ConcurrentHashMap<UUID, Array<ItemStack?>>()
-    private val savedGameModes = ConcurrentHashMap<UUID, GameMode>()
-    private val savedLocations = ConcurrentHashMap<UUID, Location>()
+    private val activeControllers = ConcurrentHashMap<UUID, CutscenePlaybackController>()
+    private val activeRecorders = ConcurrentHashMap<UUID, CutsceneRecorder>()
+
     private val cutsceneFolder = File(plugin.dataFolder, "cutscenes")
 
     init {
-        // Initialize SQLite database
-        val databaseFile = File(plugin.dataFolder, "cutscenes.db")
-        databaseService = SQLiteCutsceneDatabaseService(databaseFile)
-
+        databaseService = createDatabaseService()
         try {
             databaseService.initialize()
-            // Load cutscenes from database
+            persistentStorageEnabled = true
             loadCutscenesFromDatabase()
+            loadCutscenesFromFiles()
         } catch (e: Exception) {
+            persistentStorageEnabled = false
             plugin.logger.log(Level.SEVERE, "Failed to initialize database, falling back to file storage", e)
-            // Fallback to file storage if database fails
             loadCutscenesFromFiles()
         }
     }
 
-    // Load cutscenes from database
-    private fun loadCutscenesFromDatabase() {
-        try {
-            val loadedCutscenes = databaseService.loadAllCutscenes()
-            for (cutscene in loadedCutscenes) {
-                cutscenes[cutscene.name.lowercase()] = cutscene
+    // Database / File bootstrap
+    private fun createDatabaseService(): CutsceneDatabaseService {
+        val config = plugin.configManager.config
+        val typeName = config?.getString("storage.type")?.uppercase(Locale.ROOT) ?: DatabaseType.SQLITE.name
+        val type = runCatching { DatabaseType.valueOf(typeName) }.getOrElse {
+            plugin.logger.warning("Unknown storage type '$typeName', falling back to SQLITE")
+            DatabaseType.SQLITE
+        }
+        return when (type) {
+            DatabaseType.SQLITE -> {
+                val filePath = config?.getString("storage.sqlite.file-path").orEmpty().ifBlank { "cutscenes.db" }
+                SQLiteCutsceneDatabaseService(File(plugin.dataFolder, filePath))
             }
-            plugin.logger.info("Loaded ${loadedCutscenes.size} cutscenes from database")
-        } catch (e: Exception) {
-            plugin.logger.log(java.util.logging.Level.SEVERE, "Failed to load cutscenes from database", e)
+            DatabaseType.MYSQL -> MySQLCutsceneDatabaseService(
+                host = config?.getString("storage.mysql.host") ?: "localhost",
+                port = config?.getInt("storage.mysql.port", 3306) ?: 3306,
+                database = config?.getString("storage.mysql.database") ?: "minecraft",
+                username = config?.getString("storage.mysql.username") ?: "root",
+                password = config?.getString("storage.mysql.password") ?: ""
+            )
+            DatabaseType.POSTGRESQL -> PostgreSQLCutsceneDatabaseService(
+                host = config?.getString("storage.postgresql.host") ?: "localhost",
+                port = config?.getInt("storage.postgresql.port", 5432) ?: 5432,
+                database = config?.getString("storage.postgresql.database") ?: "minecraft",
+                username = config?.getString("storage.postgresql.username") ?: "postgres",
+                password = config?.getString("storage.postgresql.password") ?: ""
+            )
+            DatabaseType.MONGODB -> {
+                val host = config?.getString("storage.mongodb.host") ?: "localhost"
+                val port = config?.getInt("storage.mongodb.port", 27017) ?: 27017
+                val database = config?.getString("storage.mongodb.database") ?: "minecraft"
+                val username = config?.getString("storage.mongodb.username").orEmpty()
+                val password = config?.getString("storage.mongodb.password").orEmpty()
+                val credentials = if (username.isNotBlank()) "$username:$password@" else ""
+                MongoDBCutsceneDatabaseService("mongodb://$credentials$host:$port", database)
+            }
+            DatabaseType.REDIS -> RedisCutsceneDatabaseService(
+                host = config?.getString("storage.redis.host") ?: "localhost",
+                port = config?.getInt("storage.redis.port", 6379) ?: 6379,
+                password = config?.getString("storage.redis.password").takeUnless { it.isNullOrBlank() },
+                database = config?.getInt("storage.redis.database", 0) ?: 0
+            )
         }
     }
 
-    private fun loadCutscenesFromFiles() {
-        val cutsceneFolder = java.io.File(plugin.dataFolder, "cutscenes")
-        val files = cutsceneFolder.listFiles { _, name -> name.endsWith(".yml") } ?: return
+    private fun loadCutscenesFromDatabase() {
+        try {
+            val loaded = databaseService.loadAllCutscenes()
+            for (c in loaded) cutscenes[c.name.lowercase()] = c
+            plugin.logger.info("Loaded ${loaded.size} cutscenes from database")
+        } catch (e: Exception) {
+            plugin.logger.log(Level.SEVERE, "Failed to load cutscenes from database", e)
+        }
+    }
 
-        var fileCount = 0
+    private fun ensureCutsceneFolderExists(): Boolean {
+        if (cutsceneFolder.exists()) return cutsceneFolder.isDirectory || false
+        return cutsceneFolder.mkdirs()
+    }
+
+    private fun loadCutscenesFromFiles() {
+        if (!ensureCutsceneFolderExists()) return
+        val files = cutsceneFolder.listFiles { _, name -> name.endsWith(".yml") } ?: return
+        var count = 0
         for (file in files) {
             try {
                 val config = YamlConfiguration.loadConfiguration(file)
-                val name = file.name.replace(".yml", "")
-
-                // Skip if already loaded from database
-                if (cutscenes.containsKey(name.lowercase())) {
-                    continue
-                }
-
+                val name = file.nameWithoutExtension
+                if (cutscenes.containsKey(name.lowercase())) continue
                 val frames = mutableListOf<CutsceneFrame>()
-                val framesSection: ConfigurationSection? = config.getConfigurationSection("frames")
-
+                val framesSection = config.getConfigurationSection("frames")
+                val frameDurationMs = loadFrameDurationMs(config)
                 if (framesSection != null) {
                     for (key in framesSection.getKeys(false)) {
-                        val frameSection = framesSection.getConfigurationSection(key)
-                        if (frameSection != null) {
-                            val worldName = frameSection.getString("world")
-                            val x = frameSection.getDouble("x")
-                            val y = frameSection.getDouble("y")
-                            val z = frameSection.getDouble("z")
-                            val yaw = frameSection.getDouble("yaw").toFloat()
-                            val pitch = frameSection.getDouble("pitch").toFloat()
-
-                            if (worldName != null && Bukkit.getWorld(worldName) != null) {
-                                val location = Location(Bukkit.getWorld(worldName), x, y, z, yaw, pitch)
-                                frames.add(CutsceneFrame(location))
-                            }
-                        }
+                        val sec = framesSection.getConfigurationSection(key) ?: continue
+                        val worldName = sec.getString("world") ?: continue
+                        val world = Bukkit.getWorld(worldName) ?: continue
+                        val loc = Location(
+                            world,
+                            sec.getDouble("x"),
+                            sec.getDouble("y"),
+                            sec.getDouble("z"),
+                            sec.getDouble("yaw").toFloat(),
+                            sec.getDouble("pitch").toFloat()
+                        )
+                        frames.add(CutsceneFrame(loc, worldName))
                     }
                 }
-
                 if (frames.isNotEmpty()) {
-                    val cutscene = Cutscene(name, frames)
+                    val cutscene = Cutscene(name, frames, frameDurationMs)
                     cutscenes[name.lowercase()] = cutscene
-                    fileCount++
-
-                    // Try to save to database for migration
-                    try {
-                        databaseService.saveCutscene(cutscene)
-                        plugin.logger.info("Migrated cutscene from file to database: $name")
-                    } catch (dbException: Exception) {
-                        plugin.logger.log(java.util.logging.Level.WARNING, "Failed to migrate cutscene to database: $name", dbException)
+                    count++
+                    if (persistentStorageEnabled) {
+                        try {
+                            databaseService.saveCutscene(cutscene)
+                            plugin.logger.info("Migrated cutscene from file to database: $name")
+                        } catch (dbEx: Exception) {
+                            plugin.logger.log(Level.WARNING, "Failed to migrate cutscene to database: $name", dbEx)
+                        }
                     }
                 }
             } catch (e: Exception) {
                 plugin.logger.warning("Failed to load cutscene from file: ${file.name}")
             }
         }
-
-        if (fileCount > 0) {
-            plugin.logger.info("Loaded $fileCount cutscenes from files")
-        }
+        if (count > 0) plugin.logger.info("Loaded $count cutscenes from files")
     }
 
     private fun saveCutscene(cutscene: Cutscene) {
-        val file = File(cutsceneFolder, "${cutscene.name}.yml")
-        val config = YamlConfiguration()
-
-        config.set("name", cutscene.name)
-
-        val frames = cutscene.frames
-        for (i in frames.indices) {
-            val frame = frames[i]
-            val location = frame.location
-
-            config.set("frames.$i.world", location.world?.name ?: "world")
-            config.set("frames.$i.x", location.x)
-            config.set("frames.$i.y", location.y)
-            config.set("frames.$i.z", location.z)
-            config.set("frames.$i.yaw", location.yaw)
-            config.set("frames.$i.pitch", location.pitch)
-        }
-
-        try {
-            config.save(file)
-        } catch (e: IOException) {
-            plugin.logger.warning("Failed to save cutscene: ${cutscene.name}")
-        }
+        if (persistentStorageEnabled) databaseService.saveCutscene(cutscene)
+        saveCutsceneToFile(cutscene)
     }
 
+    private fun saveCutsceneToFile(cutscene: Cutscene) {
+        if (!ensureCutsceneFolderExists()) throw IOException("Cutscene directory unavailable")
+        val file = File(cutsceneFolder, "${cutscene.name}.yml")
+        val config = YamlConfiguration()
+        config.set("name", cutscene.name)
+        config.set("frame-duration-ms", cutscene.frameDurationMs)
+        config.set("ticks-per-frame", cutscene.ticksPerFrame)
+        config.set("schema-version", 1)
+        for (i in cutscene.frames.indices) {
+            val f = cutscene.frames[i]
+            config.set("frames.$i.world", f.worldName)
+            config.set("frames.$i.x", f.location.x)
+            config.set("frames.$i.y", f.location.y)
+            config.set("frames.$i.z", f.location.z)
+            config.set("frames.$i.yaw", f.location.yaw)
+            config.set("frames.$i.pitch", f.location.pitch)
+        }
+        config.save(file)
+    }
+
+    private fun loadFrameDurationMs(config: FileConfiguration): Long {
+        val stored = config.getLong("frame-duration-ms", -1L)
+        if (stored > 0L) return stored
+        val legacy = config.getInt("ticks-per-frame", 1).coerceAtLeast(1)
+        return legacy * 50L
+    }
+
+    // Recording
     override fun startRecording(player: Player, name: String, frames: Int) {
         val playerId = player.uniqueId
-
         if (playerSessions.containsKey(playerId)) {
-            val message = plugin.configManager.getMessage("already-recording")
-            player.sendMessage(message)
+            player.sendMessage(plugin.configManager.getMessage("already-recording"))
             return
         }
-
         if (cutscenes.containsKey(name.lowercase())) {
-            val message = plugin.configManager.getMessage("cutscene-already-exists")?.replace("{name}", name) ?: "§cA cutscene with that name already exists!"
-            player.sendMessage(message)
+            player.sendMessage(
+                plugin.configManager.getMessage("cutscene-already-exists")?.replace("{name}", name)
+                    ?: "§cA cutscene with that name already exists!"
+            )
             return
         }
 
         val countdownSeconds = plugin.configManager.config?.getInt("settings.countdown-seconds", 3) ?: 3
-        val countdownMessage = plugin.configManager.getMessage("recording-countdown")
-            ?.replace("{seconds}", countdownSeconds.toString())
-            ?: "§aRecording will start in $countdownSeconds seconds..."
-        player.sendMessage(countdownMessage)
+        player.sendMessage(
+            plugin.configManager.getMessage("recording-countdown")?.replace("{seconds}", countdownSeconds.toString())
+                ?: "§aRecording will start in $countdownSeconds seconds..."
+        )
+        playerSessions[playerId] = PlayerSession.RecordingCountdown(playerId, name, frames, countdownSeconds)
 
-        object : BukkitRunnable() {
+        val task = object : BukkitRunnable() {
             var seconds = countdownSeconds
-
             override fun run() {
+                if (!player.isOnline || playerSessions[playerId] !is PlayerSession.RecordingCountdown) {
+                    cancel(); sessionTasks.remove(playerId); return
+                }
                 if (seconds > 0) {
-                    val countdownTickMessage = plugin.configManager.getMessage("countdown")?.replace("{seconds}", seconds.toString()) ?: "§e$seconds..."
-                    player.sendMessage(countdownTickMessage)
+                    playerSessions[playerId] = PlayerSession.RecordingCountdown(playerId, name, frames, seconds)
+                    player.sendMessage(
+                        plugin.configManager.getMessage("countdown")?.replace("{seconds}", seconds.toString()) ?: "§e$seconds..."
+                    )
                     seconds--
                 } else {
-                    cancel()
-                    startRecordingProcess(player, name, frames)
+                    cancel(); sessionTasks.remove(playerId); startRecordingProcess(player, name, frames)
                 }
             }
         }.runTaskTimer(plugin, 0L, 20L)
-    }
-
-    private fun startRecordingProcess(player: Player, name: String, totalFrames: Int) {
-        val playerId = player.uniqueId
-        val frames = mutableListOf<CutsceneFrame>()
-
-        // Create recording session
-        val session = PlayerSession.Recording(playerId, name, totalFrames)
-        playerSessions[playerId] = session
-
-        val message = plugin.configManager.getMessage("recording-started")?.replace("{name}", name) ?: "§aStarted recording cutscene '$name'!"
-        player.sendMessage(message)
-
-        val framesPerSecond = plugin.configManager.config?.getInt("settings.frames-per-second", 30) ?: 30
-        val delay = max(1L, 20L / framesPerSecond)
-
-        val task = object : BukkitRunnable() {
-            var frameCount = 0
-
-            override fun run() {
-                if (frameCount >= totalFrames) {
-                    finishRecording(player, name, frames)
-                    cancel()
-                    return
-                }
-
-                frames.add(CutsceneFrame(player.location.clone()))
-                frameCount++
-
-                // Update session with current frame count
-                playerSessions[playerId] = session.copy(frameCount = frameCount)
-
-                if (frameCount % framesPerSecond == 0 || frameCount == totalFrames) {
-                    val progressMessage = plugin.configManager.getMessage("recording-progress")
-                        ?.replace("{current}", frameCount.toString())
-                        ?.replace("{total}", totalFrames.toString()) ?: "§7Recorded $frameCount/$totalFrames frames"
-                    player.sendMessage(progressMessage)
-                }
-            }
-        }.runTaskTimer(plugin, 0L, delay)
-
         sessionTasks[playerId] = task
     }
 
-    private fun finishRecording(player: Player, name: String, frames: List<CutsceneFrame>) {
+    private fun startRecordingProcess(player: Player, name: String, totalFrames: Int) {
+        if (!player.isOnline) return
         val playerId = player.uniqueId
+        val settings = plugin.configManager.getRecordingSettings()
+        playerSessions[playerId] = PlayerSession.Recording(playerId, name, 0)
+        player.sendMessage(plugin.configManager.getMessage("recording-started")?.replace("{name}", name) ?: "§aStarted recording cutscene '$name'!")
 
-        val cutscene = Cutscene(name, frames)
-        cutscenes[name.lowercase()] = cutscene
-        saveCutscene(cutscene)
-
-        val message = plugin.configManager.getMessage("recording-finished")
-            ?.replace("{name}", name)
-            ?.replace("{frames}", frames.size.toString()) ?: "§aFinished recording cutscene '$name' with ${frames.size} frames!"
-        player.sendMessage(message)
-
-        // Clean up session
-        playerSessions.remove(playerId)
-        sessionTasks.remove(playerId)
+        val recorder = CutsceneRecorder(
+            plugin = plugin,
+            settings = settings,
+            onComplete = { cutscene ->
+                cutscenes[cutscene.name.lowercase()] = cutscene
+                try {
+                    saveCutscene(cutscene)
+                } catch (e: Exception) {
+                    cutscenes.remove(cutscene.name.lowercase())
+                    plugin.logger.log(Level.SEVERE, "Failed to persist cutscene: ${cutscene.name}", e)
+                    player.sendMessage(plugin.configManager.getMessage("error-occurred") ?: "§cFailed to save cutscene.")
+                    playerSessions.remove(playerId)
+                    activeRecorders.remove(playerId)
+                    return@CutsceneRecorder
+                }
+                player.sendMessage(
+                    plugin.configManager.getMessage("recording-finished")
+                        ?.replace("{name}", cutscene.name)
+                        ?.replace("{frames}", cutscene.frames.size.toString())
+                        ?: "§aFinished recording cutscene '${cutscene.name}' with ${cutscene.frames.size} frames!"
+                )
+                playerSessions.remove(playerId)
+                activeRecorders.remove(playerId)
+            },
+            onCancel = {
+                player.sendMessage(plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", name) ?: "§cRecording cancelled.")
+                playerSessions.remove(playerId)
+                activeRecorders.remove(playerId)
+            }
+        )
+        activeRecorders[playerId] = recorder
+        recorder.start(player, name, totalFrames)
     }
 
+    // Playback
     override fun playCutscene(player: Player, name: String) {
         val playerId = player.uniqueId
-
         if (playerSessions.containsKey(playerId)) {
             player.sendMessage(plugin.configManager.getMessage("already-playing") ?: "")
             return
         }
-
         val cutscene = cutscenes[name.lowercase()]
         if (cutscene == null || cutscene.frames.isEmpty()) {
-            player.sendMessage(plugin.configManager.getMessage("cutscene-not-found")
-                ?.replace("{name}", name) ?: "§cNot found")
+            player.sendMessage(plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cNot found")
             return
         }
 
-        val frames = cutscene.frames
-        val session = PlayerSession.Playback(playerId, name, 0, frames.size)
-        playerSessions[playerId] = session
-
-        player.sendMessage(plugin.configManager.getMessage("cutscene-playing")
-            ?.replace("{name}", name) ?: "§aPlaying...")
-
-        savedGameModes[playerId] = player.gameMode
-        savedLocations[playerId] = player.location.clone()
-        player.gameMode = GameMode.SPECTATOR
-
-        // Teleport immediately to the start and teleport until the chunks are fully loaded
-        player.teleport(frames[0].location)
-
-        // Asynchronous preloading of ALL chunks
-        preloadChunksAsync(frames)
-
-        val framesPerSecond = plugin.configManager.config
-            ?.getInt("settings.frames-per-second", 30) ?: 30
-
-        // The duration of one keyframe in ms
-        val frameDurationMs = 1000L / framesPerSecond.coerceAtLeast(1)
-        val totalDurationMs = frameDurationMs * (frames.size - 1)
-
-        val startTime = System.currentTimeMillis()
-
-        // ③ Один тик = 50 мс. Позиция рассчитывается по реальному времени.
-        val task = object : BukkitRunnable() {
-            override fun run() {
-                // Игрок мог выйти или сессия отменена
-                if (!player.isOnline() || !playerSessions.containsKey(playerId)) {
-                    cancel(); return
-                }
-
-                val elapsed = System.currentTimeMillis() - startTime
-
-                // The cutscene is complete
-                if (elapsed >= totalDurationMs) {
-                    player.teleport(frames.last().location)
-                    finishPlayback(player, name, savedLocations[playerId] ?: frames[0].location)
-                    cancel(); return
-                }
-
-                // Determine the current segment [frameIndex -> ​​frameIndex+1]
-                val frameIndex = (elapsed / frameDurationMs).toInt().coerceIn(0, frames.size - 2)
-
-                // Normalized t within the current segment [0..1]
-                val rawT = ((elapsed - frameIndex * frameDurationMs) /
-                             frameDurationMs.toFloat()).coerceIn(0f, 1f)
-
-                // Apply smoothStep easing
-                val easedT = smoothStep(rawT)
-
-                // Position on the Catmull-Rom spline
-                val loc = interpolateCatmull(frames, frameIndex, easedT)
-
-                // The chunk isnt loaded - just wait for the next tick
-                val cx = loc.blockX shr 4
-                val cz = loc.blockZ shr 4
-                if (!loc.world.isChunkLoaded(cx, cz)) return
-
-                player.teleport(loc)
-
-                // ⑩ Action bar прогресс
-                val progressText = " ${frameIndex + 1} / ${frames.size}"
-                player.sendActionBar(MiniMessage.miniMessage().deserialize(progressText))
-
-                playerSessions[playerId] = session.copy(currentFrame = frameIndex + 1)
-            }
-        }.runTaskTimer(plugin, 0L, 1L) // Every tick (50 ms)
-
-        sessionTasks[playerId] = task
-    }
-
-    private fun preloadChunksAsync(frames: List<CutsceneFrame>) {
-        val world = frames.firstOrNull()?.location?.world ?: return
-
-        // Collect unique chunks + neighbors in R=2
-        val chunks = mutableSetOf<Pair<Int, Int>>()
-        frames.forEach { frame ->
-            val cx = frame.location.blockX shr 4
-            val cz = frame.location.blockZ shr 4
-            for (dx in -2..2) {
-                for (dz in -2..2) {
-                    chunks.add((cx + dx) to (cz + dz))
-                }
-            }
+        val resolvedFrames = resolveFrameLocations(cutscene.frames)
+        if (resolvedFrames == null) {
+            val worldName = findFirstMissingWorldName(cutscene.frames) ?: "unknown"
+            player.sendMessage("§cUnable to play cutscene '$name': world '$worldName' is not loaded.")
+            return
         }
 
+        val settings = plugin.configManager.getPlaybackSettings()
+        val interpolator = createInterpolator(settings.interpolation)
+
+        val path = if (settings.bakePath) {
+            try {
+                PathBaker.bake(cutscene.copy(frames = resolvedFrames.map { CutsceneFrame(it) }), settings, interpolator)
+            } catch (e: Exception) {
+                plugin.logger.warning("Failed to bake path for '$name', falling back to raw frames: ${e.message}")
+                resolvedFrames
+            }
+        } else resolvedFrames
+
+        if (path.isEmpty()) {
+            player.sendMessage("§cCutscene '$name' produced an empty path.")
+            return
+        }
+
+        val totalDurationMs = cutscene.frameDurationMs * (cutscene.frames.size - 1)
+        playerSessions[playerId] = PlayerSession.Playback(playerId, name, 0, path.size)
+        player.sendMessage(plugin.configManager.getMessage("cutscene-playing")?.replace("{name}", name) ?: "§aPlaying...")
+
+        player.teleport(path[0])
+        preloadChunksAsync(path)
+
+        val controller = AsyncPacketPlaybackController(
+            plugin = plugin,
+            updateRate = settings.updateRate,
+            onComplete = {
+                Bukkit.getScheduler().runTask(plugin, Runnable {
+                    val p = Bukkit.getPlayer(playerId)
+                    if (p != null) {
+                        val session = playerSessions[playerId]
+                        if (session is PlayerSession.Playback) {
+                            finishPlayback(p, session.name)
+                        }
+                    } else {
+                        cleanupSession(playerId)
+                    }
+                })
+                Unit
+            },
+            onCancel = {
+                Bukkit.getScheduler().runTask(plugin, Runnable {
+                    cleanupSession(playerId)
+                })
+                Unit
+            }
+        )
+        activeControllers[playerId] = controller
+        controller.start(player, path, totalDurationMs)
+    }
+
+    private fun createInterpolator(type: InterpolationType): PathInterpolator = when (type) {
+        InterpolationType.LINEAR -> LinearPathInterpolator()
+        InterpolationType.CATMULL_ROM -> CatmullRomPathInterpolator()
+        InterpolationType.BEZIER -> BezierPathInterpolator()
+    }
+
+    private fun finishPlayback(player: Player, name: String) {
+        player.sendMessage(plugin.configManager.getMessage("cutscene-playback-finished")?.replace("{name}", name) ?: "§aFinished playing cutscene '$name'!")
+        cleanupSession(player.uniqueId)
+    }
+
+    private fun cleanupSession(playerId: UUID) {
+        playerSessions.remove(playerId)
+        sessionTasks.remove(playerId)?.cancel()
+        activeControllers.remove(playerId)?.stop()
+        activeRecorders.remove(playerId)?.cancel()
+    }
+
+    private fun preloadChunksAsync(frames: List<Location>) {
+        val world = frames.firstOrNull()?.world ?: return
+        val chunks = mutableSetOf<Pair<Int, Int>>()
+        frames.forEach { f ->
+            val cx = f.blockX shr 4
+            val cz = f.blockZ shr 4
+            for (dx in -2..2) for (dz in -2..2) chunks.add((cx + dx) to (cz + dz))
+        }
         chunks.forEach { (cx, cz) ->
             if (!world.isChunkLoaded(cx, cz)) {
                 try {
-                    // async
                     world.getChunkAtAsync(cx, cz)
                 } catch (_: NoSuchMethodError) {
-                    // Fallback for Spigot
-                    plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable {
-                        world.loadChunk(cx, cz, false)
-                    })
+                    plugin.server.scheduler.runTaskAsynchronously(plugin, Runnable { world.loadChunk(cx, cz, false) })
                 }
             }
         }
-
         plugin.logger.info("Preloading ${chunks.size} chunks for cutscene...")
     }
 
-    // Creates curve through 4 points: p0..p3, t ∈ [0,1] - position between p1 and p2
-    // α = 0.5 (centripetal) - prevents artifacts with uneven points
-    private fun catmullRom(
-        p0: Double, p1: Double,
-        p2: Double, p3: Double,
-        t: Float
-    ): Double {
-        val t2 = t * t
-        val t3 = t2 * t
-        return 0.5 * (
-            (2.0 * p1) +
-            (-p0 + p2) * t +
-            (2.0 * p0 - 5.0 * p1 + 4.0 * p2 - p3) * t2 +
-            (-p0 + 3.0 * p1 - 3.0 * p2 + p3) * t3
-        )
-    }
-
-    // Separate corner processing: normalizes the difference in the range [-180, 180]
-    private fun catmullRomAngle(
-        a0: Float, a1: Float,
-        a2: Float, a3: Float,
-        t: Float
-    ): Float {
-        fun norm(a: Float) = ((a % 360f) + 360f) % 360f
-        fun diff(from: Float, to: Float): Float {
-            var d = norm(to) - norm(from)
-            if (d > 180f)  d -= 360f
-            if (d < -180f) d += 360f
-            return d
-        }
-       // We construct points relative to a1, maintaining continuity
-        val b0 = a1 - diff(a0, a1)
-        val b2 = a1 + diff(a1, a2)
-        val b3 = b2 + diff(a2, a3)
-        return catmullRom(b0.toDouble(), a1.toDouble(), b2.toDouble(), b3.toDouble(), t).toFloat()
-    }
-
-    // t²(3 - 2t): derivative = 0 at t=0 and t=1 -> no velocity jumps
-    private fun smoothStep(t: Float): Float = t * t * (3f - 2f * t)
-
-    private fun interpolateCatmull(
-        frames: List<CutsceneFrame>,
-        index: Int,
-        t: Float
-    ): Location {
-        val n = frames.size
-        // Take 4 adjacent keyframes and clamp them at the edges
-        val i0 = (index - 1).coerceAtLeast(0)
-        val i1 = index
-        val i2 = (index + 1).coerceAtMost(n - 1)
-        val i3 = (index + 2).coerceAtMost(n - 1)
-
-        val p0 = frames[i0].location
-        val p1 = frames[i1].location
-        val p2 = frames[i2].location
-        val p3 = frames[i3].location
-
-        val world = p1.world
-        val x = catmullRom(p0.x, p1.x, p2.x, p3.x, t)
-        val y = catmullRom(p0.y, p1.y, p2.y, p3.y, t)
-        val z = catmullRom(p0.z, p1.z, p2.z, p3.z, t)
-        val yaw = catmullRomAngle(p0.yaw, p1.yaw, p2.yaw, p3.yaw, t)
-        val pitch = catmullRomAngle(p0.pitch, p1.pitch, p2.pitch, p3.pitch, t)
-
-        return Location(world, x, y, z, yaw, pitch)
-    }
-
-    private fun finishPlayback(player: Player, name: String, originalLocation: Location) {
-        val playerId = player.uniqueId
-
-        // Restore player's game mode
-        val savedGameMode = savedGameModes.remove(playerId)
-        if (savedGameMode != null) {
-            player.gameMode = savedGameMode
-        }
-
-        // Ensure the original location chunk is loaded before teleporting back
-        if (!originalLocation.world.isChunkLoaded(originalLocation.blockX shr 4, originalLocation.blockZ shr 4)) {
-            originalLocation.world.loadChunk(originalLocation.blockX shr 4, originalLocation.blockZ shr 4, true)
-        }
-
-        player.teleport(originalLocation)
-        savedLocations.remove(playerId)
-        val message = plugin.configManager.getMessage("cutscene-playback-finished")?.replace("{name}", name) ?: "§aFinished playing cutscene '$name'!"
-        player.sendMessage(message)
-
-        // Clean up session
-        playerSessions.remove(playerId)
-        sessionTasks.remove(playerId)
-    }
-
-    override fun deleteCutscene(player: Player, name: String) {
-        if (!cutscenes.containsKey(name.lowercase())) {
-            val message = plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' not found!"
-            player.sendMessage(message)
-            return
-        }
-
-        // Delete file if it exists
-        val file = File(cutsceneFolder, "$name.yml")
-        if (file.exists()) {
-            file.delete()
-        }
-
-        cutscenes.remove(name.lowercase())
-        val message = plugin.configManager.getMessage("cutscene-deleted")?.replace("{name}", name) ?: "§aDeleted cutscene '$name'!"
-        player.sendMessage(message)
-    }
-
-    override fun listAllCutscenes(player: Player) {
-        if (cutscenes.isEmpty()) {
-            val message = plugin.configManager.getMessage("no-cutscenes") ?: "§7No cutscenes found."
-            player.sendMessage(message)
-            return
-        }
-
-        val headerMessage = plugin.configManager.getMessage("cutscene-list-header") ?: "§6=== Available Cutscenes ==="
-        player.sendMessage(headerMessage)
-
-        for ((_, cutscene) in cutscenes) {
-            val itemMessage = plugin.configManager.getMessage("cutscene-list-item")
-                ?.replace("{name}", cutscene.name)
-                ?.replace("{frames}", cutscene.frames.size.toString()) ?: "§7- §f${cutscene.name} §7(${cutscene.frames.size} frames)"
-            player.sendMessage(itemMessage)
-        }
-    }
-
+    // Path visualization
     override fun showCutscenePath(player: Player, name: String) {
         val playerId = player.uniqueId
-
         if (playerSessions.containsKey(playerId)) {
-            val message = plugin.configManager.getMessage("path-already-showing") ?: "§cYou are already visualizing a path!"
-            player.sendMessage(message)
+            player.sendMessage(plugin.configManager.getMessage("path-already-showing") ?: "§cYou are already visualizing a path!")
             return
         }
-
         val cutscene = cutscenes[name.lowercase()]
-        if (cutscene == null) {
-            val message = plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' not found!"
-            player.sendMessage(message)
+        if (cutscene == null || cutscene.frames.isEmpty()) {
+            player.sendMessage(plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cNot found")
             return
         }
-
-        val frames = cutscene.frames
-        if (frames.isEmpty()) {
-            val message = plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cCutscene '$name' has no frames!"
-            player.sendMessage(message)
-            return
-        }
-
         val durationSeconds = plugin.configManager.config?.getInt("settings.path-visualization.duration", 30) ?: 30
+        val particleName = plugin.configManager.config?.getString("settings.path-visualization.particle", "END_ROD")?.replace(" ", "_")?.uppercase() ?: "END_ROD"
+        val pathParticle = try { Particle.valueOf(particleName) } catch (_: IllegalArgumentException) { Particle.END_ROD }
+        val spacing = plugin.configManager.config?.getDouble("settings.path-visualization.spacing", 0.5) ?: 0.5
 
-        // Create path visualization session
-        val session = PlayerSession.PathVisualization(playerId, name, durationSeconds)
-        playerSessions[playerId] = session
+        playerSessions[playerId] = PlayerSession.PathVisualization(playerId, name, durationSeconds)
+        player.sendMessage(plugin.configManager.getMessage("showing-path")?.replace("{name}", name)?.replace("{duration}", durationSeconds.toString()) ?: "§aShowing path for '$name'...")
 
-        val message = plugin.configManager.getMessage("showing-path")
-            ?.replace("{name}", name)
-            ?.replace("{duration}", durationSeconds.toString()) ?: "§aShowing path for '$name' ($durationSeconds seconds)..."
-        player.sendMessage(message)
+        val resolvedFrames = resolveFrameLocations(cutscene.frames)
+        if (resolvedFrames == null) {
+            player.sendMessage("§cUnable to show path for '$name': world is not loaded.")
+            playerSessions.remove(playerId)
+            return
+        }
 
         val task = object : BukkitRunnable() {
             var tickCounter = 0
             val totalTicks = durationSeconds * 20
-
             override fun run() {
                 if (tickCounter >= totalTicks) {
-                    cancel()
-                    playerSessions.remove(playerId)
-                    sessionTasks.remove(playerId)
-                    return
+                    cancel(); playerSessions.remove(playerId); sessionTasks.remove(playerId); return
                 }
-
-                for (i in 0 until frames.size - 1) {
-                    val start = frames[i].location
-                    val end = frames[i + 1].location
-
-                    if (start.world != end.world) {
-                        continue
-                    }
-
+                for (i in 0 until resolvedFrames.size - 1) {
+                    val start = resolvedFrames[i]
+                    val end = resolvedFrames[i + 1]
+                    if (start.world != end.world) continue
                     val distance = start.distance(end)
                     val direction = end.toVector().subtract(start.toVector()).normalize()
-
                     var d = 0.0
                     while (d < distance) {
                         val point = start.toVector().add(direction.clone().multiply(d))
-                        start.world.spawnParticle(
-                            Particle.END_ROD,
-                            point.x, point.y, point.z,
-                            1, 0.0, 0.0, 0.0, 0.0
-                        )
-                        d += 0.5
+                        start.world.spawnParticle(pathParticle, point.x, point.y, point.z, 1, 0.0, 0.0, 0.0, 0.0)
+                        d += spacing
                     }
                 }
-
-                for (frame in frames) {
-                    val loc = frame.location
-                    loc.world.spawnParticle(
-                        Particle.FLAME,
-                        loc.x, loc.y, loc.z,
-                        3, 0.1, 0.1, 0.1, 0.01
-                    )
+                for (loc in resolvedFrames) {
+                    loc.world.spawnParticle(Particle.FLAME, loc.x, loc.y, loc.z, 3, 0.1, 0.1, 0.1, 0.01)
                 }
-
                 tickCounter++
             }
         }.runTaskTimer(plugin, 0L, 5L)
-
         sessionTasks[playerId] = task
     }
 
+    // Deletion / Listing
+    override fun deleteCutscene(player: Player, name: String) {
+        val normalized = name.lowercase()
+        val cutscene = cutscenes[normalized]
+        if (cutscene == null) {
+            player.sendMessage(plugin.configManager.getMessage("cutscene-not-found")?.replace("{name}", name) ?: "§cNot found")
+            return
+        }
+        val file = File(cutsceneFolder, "${cutscene.name}.yml")
+        if (file.exists() && !file.delete()) {
+            plugin.logger.warning("Failed to delete cutscene file: ${file.absolutePath}")
+            player.sendMessage(plugin.configManager.getMessage("error-occurred") ?: "§cFailed to delete.")
+            return
+        }
+        if (persistentStorageEnabled) {
+            try { databaseService.deleteCutscene(cutscene.name) } catch (e: Exception) {
+                plugin.logger.log(Level.SEVERE, "Failed to delete from database: ${cutscene.name}", e)
+                player.sendMessage(plugin.configManager.getMessage("error-occurred") ?: "§cFailed to delete.")
+                return
+            }
+        }
+        cutscenes.remove(normalized)
+        player.sendMessage(plugin.configManager.getMessage("cutscene-deleted")?.replace("{name}", name) ?: "§aDeleted.")
+    }
+
+    override fun listAllCutscenes(player: Player) {
+        if (cutscenes.isEmpty()) {
+            player.sendMessage(plugin.configManager.getMessage("no-cutscenes") ?: "§7No cutscenes found.")
+            return
+        }
+        player.sendMessage(plugin.configManager.getMessage("cutscene-list-header") ?: "§6=== Available Cutscenes ===")
+        for ((_, c) in cutscenes) {
+            player.sendMessage(
+                plugin.configManager.getMessage("cutscene-list-item")
+                    ?.replace("{name}", c.name)
+                    ?.replace("{frames}", c.frames.size.toString())
+                    ?: "§7- §f${c.name} §7(${c.frames.size} frames)"
+            )
+        }
+    }
+
+    // Cancellation
     override fun cancelRecording(player: Player) {
         val playerId = player.uniqueId
-
         val session = playerSessions[playerId]
-        if (session is PlayerSession.Recording) {
+        if (session is PlayerSession.RecordingCountdown || session is PlayerSession.Recording) {
             sessionTasks[playerId]?.cancel()
-            playerSessions.remove(playerId)
-            sessionTasks.remove(playerId)
-
-            val message = plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", session.name) ?: "§cCancelled recording of cutscene '${session.name}'!"
-            player.sendMessage(message)
+            activeRecorders[playerId]?.cancel()
+            cleanupSession(playerId)
+            player.sendMessage(plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", session.name) ?: "§cCancelled.")
         } else {
-            val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not recording anything."
-            player.sendMessage(message)
+            player.sendMessage(plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not recording anything.")
         }
     }
 
     override fun cancelPlayback(player: Player) {
         val playerId = player.uniqueId
-
         val session = playerSessions[playerId]
         if (session is PlayerSession.Playback) {
-            sessionTasks[playerId]?.cancel()
-
-            // Restore player's game mode
-            savedGameModes.remove(playerId)?.let { originalGameMode ->
-                player.gameMode = originalGameMode
-            }
-
-            // Teleport back to original location if saved
-            savedLocations.remove(playerId)?.let { originalLocation ->
-                // Ensure the original location chunk is loaded before teleporting back
-                if (!originalLocation.world.isChunkLoaded(originalLocation.blockX shr 4, originalLocation.blockZ shr 4)) {
-                    originalLocation.world.loadChunk(originalLocation.blockX shr 4, originalLocation.blockZ shr 4, true)
-                }
-                player.teleport(originalLocation)
-            }
-
-            playerSessions.remove(playerId)
-            sessionTasks.remove(playerId)
-
-            val message = plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", session.name) ?: "§cCancelled playback of cutscene '${session.name}'!"
-            player.sendMessage(message)
+            activeControllers[playerId]?.stop()
+            cleanupSession(playerId)
+            player.sendMessage(plugin.configManager.getMessage("playback-cancelled")?.replace("{name}", session.name) ?: "§cCancelled.")
         } else {
-            val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not watching a cutscene."
-            player.sendMessage(message)
+            player.sendMessage(plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not watching a cutscene.")
         }
     }
 
     override fun cancelPathVisualization(player: Player) {
         val playerId = player.uniqueId
-
         val session = playerSessions[playerId]
         if (session is PlayerSession.PathVisualization) {
             sessionTasks[playerId]?.cancel()
-            playerSessions.remove(playerId)
-            sessionTasks.remove(playerId)
-            val message = plugin.configManager.getMessage("path-visualization-cancelled") ?: "§aCancelled path visualization!"
-            player.sendMessage(message)
+            cleanupSession(playerId)
+            player.sendMessage(plugin.configManager.getMessage("path-visualization-cancelled") ?: "§aCancelled.")
         } else {
-            val message = plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not visualizing any path."
-            player.sendMessage(message)
+            player.sendMessage(plugin.configManager.getMessage("recording-cancelled") ?: "§7You are not visualizing any path.")
         }
     }
-
-    override fun isRecording(player: Player): Boolean {
-        val session = playerSessions[player.uniqueId]
-        return session is PlayerSession.Recording
-    }
-
-    override fun isWatchingCutscene(player: Player): Boolean {
-        val session = playerSessions[player.uniqueId]
-        return session is PlayerSession.Playback
-    }
-
-    override fun getCutsceneNames(): List<String> = cutscenes.keys.toList()
-
-    override fun getCutscene(name: String): Cutscene? = cutscenes[name.lowercase()]
 
     override fun cancelAllSessions(player: Player) {
-        val playerId = player.uniqueId
-        val session = playerSessions[playerId]
-
-        when (session) {
-            is PlayerSession.Recording -> cancelRecording(player)
+        when (playerSessions[player.uniqueId]) {
+            is PlayerSession.RecordingCountdown, is PlayerSession.Recording -> cancelRecording(player)
             is PlayerSession.Playback -> cancelPlayback(player)
             is PlayerSession.PathVisualization -> cancelPathVisualization(player)
-            null -> {
-                val message = plugin.configManager.getMessage("nothing-to-cancel") ?: "§7Nothing to cancel."
-                player.sendMessage(message)
-            }
+            null -> player.sendMessage(plugin.configManager.getMessage("nothing-to-cancel") ?: "§7Nothing to cancel.")
         }
     }
 
+    // Queries
+    override fun isRecording(player: Player): Boolean {
+        return when (playerSessions[player.uniqueId]) {
+            is PlayerSession.RecordingCountdown, is PlayerSession.Recording -> true
+            else -> false
+        }
+    }
 
+    override fun hasActiveSession(player: Player): Boolean = playerSessions.containsKey(player.uniqueId)
+    override fun isWatchingCutscene(player: Player): Boolean = playerSessions[player.uniqueId] is PlayerSession.Playback
+    override fun getCutsceneNames(): List<String> = cutscenes.keys.toList()
+    override fun getCutscene(name: String): Cutscene? = cutscenes[name.lowercase()]
+
+    // Helpers
+    private fun resolveFrameLocations(frames: List<CutsceneFrame>): List<Location>? {
+        return frames.map { it.resolveLocation() ?: return null }
+    }
+
+    private fun findFirstMissingWorldName(frames: List<CutsceneFrame>): String? {
+        return frames.firstOrNull { it.resolveLocation() == null }?.worldName
+    }
 
     override fun cleanup() {
-        // Cancel all active session tasks
-        for (task in sessionTasks.values) {
-            task?.cancel()
-        }
-
-        // Save all cutscenes
+        for (task in sessionTasks.values) task?.cancel()
+        for (controller in activeControllers.values) controller.stop()
+        for (recorder in activeRecorders.values) recorder.cancel()
         for (cutscene in cutscenes.values) {
-            saveCutscene(cutscene)
+            try { saveCutscene(cutscene) } catch (e: Exception) {
+                plugin.logger.log(Level.WARNING, "Failed to persist during cleanup: ${cutscene.name}", e)
+            }
         }
-
-        // Clear all session data
+        if (persistentStorageEnabled) databaseService.shutdown()
         playerSessions.clear()
         sessionTasks.clear()
-        savedInventories.clear()
-        savedGameModes.clear()
-        savedLocations.clear()
+        activeControllers.clear()
+        activeRecorders.clear()
     }
 }
