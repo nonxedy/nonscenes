@@ -2,6 +2,7 @@ package com.nonxedy.core
 
 import com.nonxedy.Nonscenes
 import com.nonxedy.model.playback.InterpolationType
+import com.nonxedy.model.playback.PlaybackMode
 import com.nonxedy.model.playback.PlaybackSettings
 import com.nonxedy.model.recording.RecordingSettings
 import com.nonxedy.util.ColorUtil
@@ -161,8 +162,13 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
             InterpolationType.valueOf(cfg.getString("cutscene.playback.interpolation", "CATMULL_ROM")!!.uppercase())
         }.getOrDefault(InterpolationType.CATMULL_ROM)
 
+        val mode = runCatching {
+            PlaybackMode.valueOf(cfg.getString("cutscene.playback.mode", "ASYNC_PACKET")!!.uppercase())
+        }.getOrDefault(PlaybackMode.ASYNC_PACKET)
+
         return PlaybackSettings(
             updateRate = cfg.getInt("cutscene.playback.update-rate", 60).coerceIn(20, 240),
+            mode = mode,
             interpolation = interpolation,
             smoothRotation = cfg.getBoolean("cutscene.playback.smooth-rotation", true),
             bakePath = cfg.getBoolean("cutscene.playback.bake-path", true)

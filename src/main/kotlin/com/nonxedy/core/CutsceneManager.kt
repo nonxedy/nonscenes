@@ -15,9 +15,11 @@ import com.nonxedy.interpolator.PathInterpolator
 import com.nonxedy.model.Cutscene
 import com.nonxedy.model.CutsceneFrame
 import com.nonxedy.model.playback.InterpolationType
+import com.nonxedy.model.playback.PlaybackMode
 import com.nonxedy.model.playback.PlaybackSettings
 import com.nonxedy.playback.AsyncPacketPlaybackController
 import com.nonxedy.playback.CutscenePlaybackController
+import com.nonxedy.playback.TickPlaybackController
 import com.nonxedy.playback.PathBaker
 import com.nonxedy.recording.CutsceneRecorder
 import net.kyori.adventure.text.minimessage.MiniMessage
@@ -328,30 +330,32 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         player.teleport(path[0])
         preloadChunksAsync(path)
 
-        val controller = AsyncPacketPlaybackController(
-            plugin = plugin,
-            updateRate = settings.updateRate,
-            onComplete = {
-                Bukkit.getScheduler().runTask(plugin, Runnable {
-                    val p = Bukkit.getPlayer(playerId)
-                    if (p != null) {
-                        val session = playerSessions[playerId]
-                        if (session is PlayerSession.Playback) {
-                            finishPlayback(p, session.name)
-                        }
-                    } else {
-                        cleanupSession(playerId)
+        val onComplete = {
+            Bukkit.getScheduler().runTask(plugin, Runnable {
+                val p = Bukkit.getPlayer(playerId)
+                if (p != null) {
+                    val session = playerSessions[playerId]
+                    if (session is PlayerSession.Playback) {
+                        finishPlayback(p, session.name)
                     }
-                })
-                Unit
-            },
-            onCancel = {
-                Bukkit.getScheduler().runTask(plugin, Runnable {
+                } else {
                     cleanupSession(playerId)
-                })
-                Unit
-            }
-        )
+                }
+            })
+            Unit
+        }
+        val onCancel = {
+            Bukkit.getScheduler().runTask(plugin, Runnable {
+                cleanupSession(playerId)
+            })
+            Unit
+        }
+
+        val controller = if (settings.mode == PlaybackMode.TICK) {
+            TickPlaybackController(plugin, onComplete, onCancel)
+        } else {
+            AsyncPacketPlaybackController(plugin, settings.updateRate, onComplete, onCancel)
+        }
         activeControllers[playerId] = controller
         controller.start(player, path, totalDurationMs)
     }

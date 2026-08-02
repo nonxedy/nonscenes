@@ -14,22 +14,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
-/**
- * Packet-based cutscene playback.
- *
- * The camera is moved by sending an absolute `PlayerPositionAndLook` packet to
- * the player on every update. Because the packet carries absolute coordinates
- * AND absolute rotation and is resent every update, it both:
- *  - locks the player's camera to the cutscene (they can no longer move/look away), and
- *  - keeps the player positioned exactly on the baked path.
- *
- * The player is NOT mounted on a vehicle and is kept standing, so there is no
- * sitting pose (which used to drop the camera by roughly one block) and the eye
- * height matches the one captured during recording.
- *
- * The player is hidden from their own view for the duration of the playback so
- * they don't see their own body during the cutscene.
- */
+// Packet-based cutscene playback
 class AsyncPacketPlaybackController(
     private val plugin: JavaPlugin,
     private val updateRate: Int,
@@ -41,7 +26,7 @@ class AsyncPacketPlaybackController(
     private val cleanedUp = AtomicBoolean(false)
     private var executor: ScheduledExecutorService? = null
     private val teleportId = AtomicInteger(-1000)
-    private var finalLocation: Location? = null
+    private var originalLocation: Location? = null
 
     private var playerRef: Player? = null
     private var wasFlying = false
@@ -61,9 +46,11 @@ class AsyncPacketPlaybackController(
         val lastIndex = pathArray.lastIndex
         val startTime = System.currentTimeMillis()
         val intervalNs = 1_000_000_000L / updateRate
-        finalLocation = pathArray.last()
 
-        // Prepare the player on the main thread (Bukkit requires it).
+        // Remember where the player started so we can bring them back afterwards
+        originalLocation = player.location.clone()
+
+        // Prepare the player on the main thread (Bukkit requires it)
         Bukkit.getScheduler().runTask(plugin, Runnable {
             if (!active.get() || !player.isOnline) {
                 cleanup(player)
@@ -73,11 +60,11 @@ class AsyncPacketPlaybackController(
             wasFlying = player.isFlying
             wasAllowedFlight = player.allowFlight
 
-            // Do not let the player see their own body during the cutscene.
+            // Do not let the player see their own body during the cutscene
             player.hidePlayer(player)
 
             // Keep the player hovering in place so they don't fall or drift while
-            // the packets move them along the path.
+            // the packets move them along the path
             player.setAllowFlight(true)
             player.setFlying(true)
 
@@ -110,8 +97,7 @@ class AsyncPacketPlaybackController(
                 }
 
                 val progress = elapsed.toDouble() / totalDurationMs.toDouble()
-                val index = (progress * lastIndex).toInt().coerceIn(0, lastIndex)
-                val loc = pathArray[index]
+                val loc = samplePath(pathArray, lastIndex, progress)
 
                 if (PacketEvents.getAPI().isInitialized) {
                     try {
@@ -131,6 +117,7 @@ class AsyncPacketPlaybackController(
                     }
                 }
 
+                val index = (progress * lastIndex).toInt().coerceIn(0, lastIndex)
                 if (index % (updateRate / 4).coerceAtLeast(1) == 0) {
                     val text = " ${index + 1} / ${pathArray.size}"
                     Bukkit.getScheduler().runTask(plugin, Runnable {
@@ -154,13 +141,38 @@ class AsyncPacketPlaybackController(
 
     override fun isActive(): Boolean = active.get()
 
+    // Interpolates between the two neighbouring path points using the fractional
+    // progress `t` (in 0..1). `lastIndex` is the index of the final path point
+    private fun samplePath(path: Array<Location>, lastIndex: Int, t: Double): Location {
+        val scaled = t * lastIndex
+        val idx = scaled.toInt().coerceIn(0, lastIndex)
+        val frac = (scaled - idx).coerceIn(0.0, 1.0)
+
+        val from = path[idx]
+        val to = path[(idx + 1).coerceAtMost(lastIndex)]
+
+        val x = from.x + (to.x - from.x) * frac
+        val y = from.y + (to.y - from.y) * frac
+        val z = from.z + (to.z - from.z) * frac
+        val yaw = lerpAngle(from.yaw, to.yaw, frac)
+        val pitch = (from.pitch + (to.pitch - from.pitch) * frac).toFloat()
+
+        return Location(from.world, x, y, z, yaw, pitch)
+    }
+
+    private fun lerpAngle(from: Float, to: Float, t: Double): Float {
+        var delta = ((to - from) % 360f + 360f) % 360f
+        if (delta > 180f) delta -= 360f
+        return (from + delta * t).toFloat()
+    }
+
     private fun cleanup(player: Player) {
         shutdown()
         if (!cleanedUp.compareAndSet(false, true)) return
         playerRef = null
 
         if (!player.isOnline) {
-            finalLocation = null
+            originalLocation = null
             return
         }
 
@@ -168,10 +180,11 @@ class AsyncPacketPlaybackController(
         player.setFlying(wasFlying)
         player.setAllowFlight(wasAllowedFlight)
 
-        finalLocation?.let { loc ->
+        // Bring the player back to where they started the cutscene.
+        originalLocation?.let { loc ->
             player.teleport(loc)
         }
-        finalLocation = null
+        originalLocation = null
     }
 
     private fun shutdown() {
