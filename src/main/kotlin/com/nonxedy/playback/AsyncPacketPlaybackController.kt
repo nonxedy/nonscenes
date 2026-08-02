@@ -2,12 +2,10 @@ package com.nonxedy.playback
 
 import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.util.Vector3d
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport
 import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerPositionAndLook
 import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Bukkit
 import org.bukkit.Location
-import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.util.concurrent.Executors
@@ -16,6 +14,22 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicInteger
 
+/**
+ * Packet-based cutscene playback.
+ *
+ * The camera is moved by sending an absolute `PlayerPositionAndLook` packet to
+ * the player on every update. Because the packet carries absolute coordinates
+ * AND absolute rotation and is resent every update, it both:
+ *  - locks the player's camera to the cutscene (they can no longer move/look away), and
+ *  - keeps the player positioned exactly on the baked path.
+ *
+ * The player is NOT mounted on a vehicle and is kept standing, so there is no
+ * sitting pose (which used to drop the camera by roughly one block) and the eye
+ * height matches the one captured during recording.
+ *
+ * The player is hidden from their own view for the duration of the playback so
+ * they don't see their own body during the cutscene.
+ */
 class AsyncPacketPlaybackController(
     private val plugin: JavaPlugin,
     private val updateRate: Int,
@@ -24,10 +38,14 @@ class AsyncPacketPlaybackController(
 ) : CutscenePlaybackController {
 
     private val active = AtomicBoolean(false)
+    private val cleanedUp = AtomicBoolean(false)
     private var executor: ScheduledExecutorService? = null
-    private var vehicle: ArmorStand? = null
     private val teleportId = AtomicInteger(-1000)
     private var finalLocation: Location? = null
+
+    private var playerRef: Player? = null
+    private var wasFlying = false
+    private var wasAllowedFlight = false
 
     override fun start(player: Player, path: List<Location>, totalDurationMs: Long) {
         if (path.isEmpty()) {
@@ -36,21 +54,34 @@ class AsyncPacketPlaybackController(
         }
 
         active.set(true)
+        cleanedUp.set(false)
+        playerRef = player
+
         val pathArray = path.toTypedArray()
         val lastIndex = pathArray.lastIndex
         val startTime = System.currentTimeMillis()
         val intervalNs = 1_000_000_000L / updateRate
         finalLocation = pathArray.last()
 
-        val carrier = spawnCarrier(player, pathArray[0])
-        vehicle = carrier
-
+        // Prepare the player on the main thread (Bukkit requires it).
         Bukkit.getScheduler().runTask(plugin, Runnable {
             if (!active.get() || !player.isOnline) {
                 cleanup(player)
                 return@Runnable
             }
-            carrier.addPassenger(player)
+
+            wasFlying = player.isFlying
+            wasAllowedFlight = player.allowFlight
+
+            // Do not let the player see their own body during the cutscene.
+            player.hidePlayer(player)
+
+            // Keep the player hovering in place so they don't fall or drift while
+            // the packets move them along the path.
+            player.setAllowFlight(true)
+            player.setFlying(true)
+
+            player.teleport(pathArray[0])
         })
 
         executor = Executors.newSingleThreadScheduledExecutor { r ->
@@ -84,24 +115,18 @@ class AsyncPacketPlaybackController(
 
                 if (PacketEvents.getAPI().isInitialized) {
                     try {
-                        val entityPacket = WrapperPlayServerEntityTeleport(
-                            carrier.entityId,
-                            Vector3d(loc.x, loc.y - PASSENGER_OFFSET_Y, loc.z),
+                        // Absolute position + absolute rotation. Resending this on every
+                        // update locks the player's camera to the cutscene and keeps their
+                        // position exact, so the camera cannot be moved independently.
+                        val packet = WrapperPlayServerPlayerPositionAndLook(
+                            Vector3d(loc.x, loc.y, loc.z),
                             loc.yaw,
                             loc.pitch,
-                            true
-                        )
-                        PacketEvents.getAPI().playerManager.sendPacket(player, entityPacket)
-
-                        val rotPacket = WrapperPlayServerPlayerPositionAndLook(
-                            Vector3d(0.0, 0.0, 0.0),
-                            loc.yaw,
-                            loc.pitch,
-                            RELATIVE_XYZ_FLAGS,
+                            ABSOLUTE_FLAGS,
                             teleportId.decrementAndGet(),
                             false
                         )
-                        PacketEvents.getAPI().playerManager.sendPacket(player, rotPacket)
+                        PacketEvents.getAPI().playerManager.sendPacket(player, packet)
                     } catch (_: Exception) {
                     }
                 }
@@ -120,54 +145,45 @@ class AsyncPacketPlaybackController(
 
     override fun stop() {
         active.set(false)
-        try {
-            executor?.shutdownNow()
-        } catch (_: Exception) {
+        shutdown()
+        val p = playerRef
+        if (p != null) {
+            Bukkit.getScheduler().runTask(plugin, Runnable { cleanup(p) })
         }
     }
 
     override fun isActive(): Boolean = active.get()
 
     private fun cleanup(player: Player) {
-        active.set(false)
+        shutdown()
+        if (!cleanedUp.compareAndSet(false, true)) return
+        playerRef = null
+
+        if (!player.isOnline) {
+            finalLocation = null
+            return
+        }
+
+        player.showPlayer(player)
+        player.setFlying(wasFlying)
+        player.setAllowFlight(wasAllowedFlight)
+
+        finalLocation?.let { loc ->
+            player.teleport(loc)
+        }
+        finalLocation = null
+    }
+
+    private fun shutdown() {
         try {
             executor?.shutdownNow()
         } catch (_: Exception) {
         }
         executor = null
-
-        vehicle?.let { carrier ->
-            if (!carrier.isDead) {
-                carrier.removePassenger(player)
-                carrier.remove()
-            }
-        }
-        vehicle = null
-
-        finalLocation?.let { loc ->
-            if (player.isOnline) {
-                player.teleport(loc)
-            }
-        }
-        finalLocation = null
-    }
-
-    private fun spawnCarrier(player: Player, at: Location): ArmorStand {
-        return player.world.spawn(at.clone().subtract(0.0, PASSENGER_OFFSET_Y, 0.0), ArmorStand::class.java) { stand ->
-            stand.isVisible = false
-            stand.setGravity(false)
-            stand.isInvulnerable = true
-            stand.isSilent = true
-            stand.setBasePlate(false)
-            stand.isSmall = true
-            stand.isMarker = true
-            stand.customName = null
-            stand.setCollidable(false)
-        }
     }
 
     companion object {
-        private const val PASSENGER_OFFSET_Y = 0.25
-        private const val RELATIVE_XYZ_FLAGS: Byte = 0x07
+        // 0x00 = all of x, y, z, yaw and pitch are absolute.
+        private const val ABSOLUTE_FLAGS: Byte = 0x00
     }
 }
