@@ -2,6 +2,7 @@ package com.nonxedy.playback
 
 import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Location
+import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import org.bukkit.scheduler.BukkitRunnable
@@ -11,6 +12,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 // Main-thread cutscene playback
 class TickPlaybackController(
     private val plugin: JavaPlugin,
+    private val rideHeightOffset: Double,
     private val onComplete: () -> Unit,
     private val onCancel: () -> Unit
 ) : CutscenePlaybackController {
@@ -18,6 +20,7 @@ class TickPlaybackController(
     private val active = AtomicBoolean(false)
     private val cleanedUp = AtomicBoolean(false)
     private var task: BukkitTask? = null
+    private var carrier: ArmorStand? = null
     private var playerRef: Player? = null
     private var originalLocation: Location? = null
     private var wasFlying = false
@@ -44,6 +47,10 @@ class TickPlaybackController(
         player.setAllowFlight(true)
         player.setFlying(true)
 
+        val stand = spawnCarrier(player, pathArray[0])
+        carrier = stand
+        stand.addPassenger(player)
+
         task = object : BukkitRunnable() {
             override fun run() {
                 if (!player.isOnline || !active.get()) {
@@ -64,13 +71,22 @@ class TickPlaybackController(
                 val progress = elapsed.toDouble() / totalDurationMs.toDouble()
                 val loc = samplePath(pathArray, lastIndex, progress)
 
-                val cx = loc.blockX shr 4
-                val cz = loc.blockZ shr 4
-                if (!loc.world.isChunkLoaded(cx, cz)) {
+                val stand = carrier
+                if (stand == null || stand.isDead) {
+                    cancel()
+                    cleanup()
+                    onCancel()
                     return
                 }
 
-                player.teleport(loc)
+                // The stand's Y is offset so the sitting eye height matches the
+                // recorded standing eye height. Teleporting the stand moves the
+                // rider (and the camera) smoothly
+                val carrierLoc = loc.clone().add(0.0, rideHeightOffset, 0.0)
+                if (!carrierLoc.world.isChunkLoaded(carrierLoc.blockX shr 4, carrierLoc.blockZ shr 4)) {
+                    return
+                }
+                stand.teleport(carrierLoc)
                 player.setRotation(loc.yaw, loc.pitch)
 
                 val index = (progress * lastIndex).toInt().coerceIn(0, lastIndex)
@@ -112,10 +128,31 @@ class TickPlaybackController(
         return (from + delta * t).toFloat()
     }
 
+    private fun spawnCarrier(player: Player, at: Location): ArmorStand {
+        return player.world.spawn(at.clone().add(0.0, rideHeightOffset, 0.0), ArmorStand::class.java) { stand ->
+            stand.isVisible = false
+            stand.setGravity(false)
+            stand.isInvulnerable = true
+            stand.isSilent = true
+            stand.setBasePlate(false)
+            stand.isSmall = true
+            stand.isMarker = true
+            stand.customName = null
+            stand.setCollidable(false)
+        }
+    }
+
     private fun cleanup() {
         if (!cleanedUp.compareAndSet(false, true)) return
         val player = playerRef ?: return
         playerRef = null
+
+        val stand = carrier
+        carrier = null
+        if (stand != null && !stand.isDead) {
+            stand.removePassenger(player)
+            stand.remove()
+        }
 
         if (!player.isOnline) {
             originalLocation = null

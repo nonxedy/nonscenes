@@ -5,7 +5,8 @@ data class PlaybackSettings private constructor(
     val mode: PlaybackMode = PlaybackMode.TICK,
     val interpolation: InterpolationType = InterpolationType.CATMULL_ROM,
     val smoothRotation: Boolean = true,
-    val bakePath: Boolean = true
+    val bakePath: Boolean = true,
+    val rideHeightOffset: Double = 0.75
 ) {
     val updateIntervalMs: Long
         get() = 1000L / updateRate
@@ -22,14 +23,16 @@ data class PlaybackSettings private constructor(
             mode: PlaybackMode = PlaybackMode.TICK,
             interpolation: InterpolationType = InterpolationType.CATMULL_ROM,
             smoothRotation: Boolean = true,
-            bakePath: Boolean = true
+            bakePath: Boolean = true,
+            rideHeightOffset: Double = 0.75
         ): PlaybackSettings {
             return PlaybackSettings(
                 updateRate = updateRate.coerceIn(MIN_UPDATE_RATE, MAX_UPDATE_RATE),
                 mode = mode,
                 interpolation = interpolation,
                 smoothRotation = smoothRotation,
-                bakePath = bakePath
+                bakePath = bakePath,
+                rideHeightOffset = rideHeightOffset
             )
         }
     }

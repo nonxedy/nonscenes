@@ -352,9 +352,9 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         }
 
         val controller = if (settings.mode == PlaybackMode.TICK) {
-            TickPlaybackController(plugin, onComplete, onCancel)
+            TickPlaybackController(plugin, settings.rideHeightOffset, onComplete, onCancel)
         } else {
-            AsyncPacketPlaybackController(plugin, settings.updateRate, onComplete, onCancel)
+            AsyncPacketPlaybackController(plugin, settings.updateRate, settings.rideHeightOffset, onComplete, onCancel)
         }
         activeControllers[playerId] = controller
         controller.start(player, path, totalDurationMs)

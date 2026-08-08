@@ -2,22 +2,24 @@ package com.nonxedy.playback
 
 import com.github.retrooper.packetevents.PacketEvents
 import com.github.retrooper.packetevents.util.Vector3d
-import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerPositionAndLook
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerEntityTeleport
+import com.github.retrooper.packetevents.wrapper.play.server.WrapperPlayServerPlayerRotation
 import net.kyori.adventure.text.minimessage.MiniMessage
 import org.bukkit.Bukkit
 import org.bukkit.Location
+import org.bukkit.entity.ArmorStand
 import org.bukkit.entity.Player
 import org.bukkit.plugin.java.JavaPlugin
 import java.util.concurrent.Executors
 import java.util.concurrent.ScheduledExecutorService
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicInteger
 
 // Packet-based cutscene playback
 class AsyncPacketPlaybackController(
     private val plugin: JavaPlugin,
     private val updateRate: Int,
+    private val rideHeightOffset: Double,
     private val onComplete: () -> Unit,
     private val onCancel: () -> Unit
 ) : CutscenePlaybackController {
@@ -25,7 +27,7 @@ class AsyncPacketPlaybackController(
     private val active = AtomicBoolean(false)
     private val cleanedUp = AtomicBoolean(false)
     private var executor: ScheduledExecutorService? = null
-    private val teleportId = AtomicInteger(-1000)
+    private var carrier: ArmorStand? = null
     private var originalLocation: Location? = null
 
     private var playerRef: Player? = null
@@ -50,7 +52,7 @@ class AsyncPacketPlaybackController(
         // Remember where the player started so we can bring them back afterwards
         originalLocation = player.location.clone()
 
-        // Prepare the player on the main thread (Bukkit requires it)
+        // Prepare the player and the carrier on the main thread (Bukkit requires it)
         Bukkit.getScheduler().runTask(plugin, Runnable {
             if (!active.get() || !player.isOnline) {
                 cleanup(player)
@@ -63,18 +65,21 @@ class AsyncPacketPlaybackController(
             // Do not let the player see their own body during the cutscene
             player.hidePlayer(player)
 
-            // Keep the player hovering in place so they don't fall or drift while
-            // the packets move them along the path
+            // Keep the player hovering so they don't fall or drift while riding
             player.setAllowFlight(true)
             player.setFlying(true)
 
-            player.teleport(pathArray[0])
+            val stand = spawnCarrier(player, pathArray[0])
+            carrier = stand
+            stand.addPassenger(player)
         })
 
         executor = Executors.newSingleThreadScheduledExecutor { r ->
             Thread(r, "nonscenes-async-playback-${player.uniqueId.toString().take(8)}")
         }.apply {
-            scheduleAtFixedRate({
+            // scheduleWithFixedDelay keeps a consistent interval instead of "burst
+            // catching up" after any scheduling hiccup, which reduces visible jitter
+            scheduleWithFixedDelay({
                 if (!active.get() || !player.isOnline) {
                     active.set(false)
                     shutdown()
@@ -82,7 +87,7 @@ class AsyncPacketPlaybackController(
                         cleanup(player)
                         onCancel()
                     })
-                    return@scheduleAtFixedRate
+                    return@scheduleWithFixedDelay
                 }
 
                 val elapsed = System.currentTimeMillis() - startTime
@@ -93,26 +98,30 @@ class AsyncPacketPlaybackController(
                         cleanup(player)
                         onComplete()
                     })
-                    return@scheduleAtFixedRate
+                    return@scheduleWithFixedDelay
                 }
 
                 val progress = elapsed.toDouble() / totalDurationMs.toDouble()
                 val loc = samplePath(pathArray, lastIndex, progress)
 
-                if (PacketEvents.getAPI().isInitialized) {
+                val stand = carrier
+                if (stand != null && PacketEvents.getAPI().isInitialized) {
                     try {
-                        // Absolute position + absolute rotation. Resending this on every
-                        // update locks the player's camera to the cutscene and keeps their
-                        // position exact, so the camera cannot be moved independently.
-                        val packet = WrapperPlayServerPlayerPositionAndLook(
-                            Vector3d(loc.x, loc.y, loc.z),
+                        // Move the carrier (and therefore the player's camera) to the
+                        // interpolated point. The stand's Y is offset so the sitting
+                        // eye height matches the recorded standing eye height
+                        val carrierPacket = WrapperPlayServerEntityTeleport(
+                            stand.entityId,
+                            Vector3d(loc.x, loc.y + rideHeightOffset, loc.z),
                             loc.yaw,
                             loc.pitch,
-                            ABSOLUTE_FLAGS,
-                            teleportId.decrementAndGet(),
-                            false
+                            true
                         )
-                        PacketEvents.getAPI().playerManager.sendPacket(player, packet)
+                        PacketEvents.getAPI().playerManager.sendPacket(player, carrierPacket)
+
+                        // Lock the player's own look direction (esp. pitch) each update
+                        val rotationPacket = WrapperPlayServerPlayerRotation(loc.yaw, loc.pitch)
+                        PacketEvents.getAPI().playerManager.sendPacket(player, rotationPacket)
                     } catch (_: Exception) {
                     }
                 }
@@ -141,6 +150,7 @@ class AsyncPacketPlaybackController(
 
     override fun isActive(): Boolean = active.get()
 
+    
     // Interpolates between the two neighbouring path points using the fractional
     // progress `t` (in 0..1). `lastIndex` is the index of the final path point
     private fun samplePath(path: Array<Location>, lastIndex: Int, t: Double): Location {
@@ -166,10 +176,31 @@ class AsyncPacketPlaybackController(
         return (from + delta * t).toFloat()
     }
 
+    private fun spawnCarrier(player: Player, at: Location): ArmorStand {
+        return player.world.spawn(at.clone().add(0.0, rideHeightOffset, 0.0), ArmorStand::class.java) { stand ->
+            stand.isVisible = false
+            stand.setGravity(false)
+            stand.isInvulnerable = true
+            stand.isSilent = true
+            stand.setBasePlate(false)
+            stand.isSmall = true
+            stand.isMarker = true
+            stand.customName = null
+            stand.setCollidable(false)
+        }
+    }
+
     private fun cleanup(player: Player) {
         shutdown()
         if (!cleanedUp.compareAndSet(false, true)) return
         playerRef = null
+
+        val stand = carrier
+        carrier = null
+        if (stand != null && !stand.isDead) {
+            stand.removePassenger(player)
+            stand.remove()
+        }
 
         if (!player.isOnline) {
             originalLocation = null
@@ -193,10 +224,5 @@ class AsyncPacketPlaybackController(
         } catch (_: Exception) {
         }
         executor = null
-    }
-
-    companion object {
-        // 0x00 = all of x, y, z, yaw and pitch are absolute.
-        private const val ABSOLUTE_FLAGS: Byte = 0x00
     }
 }

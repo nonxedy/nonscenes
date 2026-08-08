@@ -32,6 +32,11 @@ cutscene:
     # Requires PacketEvents installed on the server.
     update-rate: 60
 
+    # Vertical offset added to the path so that the sitting (ridden) player's eye
+    # height matches the standing height that was recorded. Increase if the camera
+    # appears too low, decrease if too high (typical fine-tune range: 0.0–1.5).
+    ride-height-offset: 0.75
+
     # LINEAR      — straight lines between keyframes (fallback).
     # CATMULL_ROM — smooth spline through all keyframes (recommended).
     # BEZIER      — cubic Bezier with auto control points.

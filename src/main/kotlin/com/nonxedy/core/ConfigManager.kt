@@ -171,7 +171,8 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
             mode = mode,
             interpolation = interpolation,
             smoothRotation = cfg.getBoolean("cutscene.playback.smooth-rotation", true),
-            bakePath = cfg.getBoolean("cutscene.playback.bake-path", true)
+            bakePath = cfg.getBoolean("cutscene.playback.bake-path", true),
+            rideHeightOffset = cfg.getDouble("cutscene.playback.ride-height-offset", 0.75)
         )
     }
 
