@@ -190,7 +190,6 @@ class ConfigManager(private val plugin: Nonscenes) : ConfigManagerInterface {
             progressBarEnabled = cfg.getBoolean("cutscene.creation.progress-bar.enabled", true),
             barStyle = style,
             barColor = color,
-            updateEveryNFrames = cfg.getInt("cutscene.creation.progress-bar.update-every-n-frames", 1).coerceAtLeast(1),
             captureIntervalTicks = cfg.getInt("cutscene.recording.capture-interval-ticks", 1).coerceAtLeast(1)
         )
     }

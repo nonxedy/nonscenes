@@ -52,7 +52,7 @@ cd nonscenes
 
 ## Commands
 
-- `/nonscene start <name> <frames>` - Start recording a cutscene
+- `/nonscene start <name> <seconds>` - Start recording a cutscene
 - `/nonscene play <name>` - Play a cutscene
 - `/nonscene all` - List all cutscenes
 - `/nonscene delete <name>` - Delete a cutscene

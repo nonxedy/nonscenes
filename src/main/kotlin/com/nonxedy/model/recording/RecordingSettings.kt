@@ -7,6 +7,5 @@ data class RecordingSettings(
     val progressBarEnabled: Boolean = true,
     val barStyle: BarStyle = BarStyle.SOLID,
     val barColor: BarColor = BarColor.BLUE,
-    val updateEveryNFrames: Int = 1,
     val captureIntervalTicks: Int = 1
 )
