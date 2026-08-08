@@ -15,7 +15,7 @@ commands:
   nonscene:
     description: Main command for cutscene management
     aliases: [ns]
-    usage: /nonscene <start|delete|all|play|showpath> [name] [frames]
+    usage: /nonscene <start|delete|all|play|showpath> [name] [seconds]
     permission: nonscene.use
 
 permissions:

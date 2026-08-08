@@ -49,7 +49,6 @@ nothing-to-cancel: "${prefix}&#e74c3cYou have no active recording, playback, or 
 help-messages:
   - "&8&m-----&r &#3498db&lNonScenes Commands &8&m-----"
   - "&#3498db/nonscene start <name> <seconds> &7- Start recording a cutscene"
-  - "&#3498db/nonscene create <name> <seconds> &7- Alias for start"
   - "&#3498db/nonscene stop &7- Cancel recording/playback"
   - "&#3498db/nonscene delete <name> &7- Delete a cutscene"
   - "&#3498db/nonscene all &7- List all cutscenes"

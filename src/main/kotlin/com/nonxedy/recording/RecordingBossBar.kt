@@ -13,22 +13,20 @@ class RecordingBossBar(
     private val plugin: JavaPlugin,
     private val player: Player,
     private val cutsceneName: String,
-    private val totalFrames: Int,
+    private val totalSeconds: Int,
     barStyle: BarStyle,
-    barColor: BarColor,
-    private val updateEveryNFrames: Int
+    barColor: BarColor
 ) {
     private val adventureColor = mapBukkitColor(barColor)
     private val adventureStyle = mapBukkitStyle(barStyle)
 
     private val bossBar: BossBar = BossBar.bossBar(
-        formatTitle(0),
+        formatTitle(0f),
         0f,
         adventureColor,
         adventureStyle
     )
 
-    private var lastReportedFrame = -1
     private var task: BukkitTask? = null
 
     init {
@@ -40,23 +38,10 @@ class RecordingBossBar(
         }, 0L, 20L)
     }
 
-    fun onFrameCaptured(currentFrame: Int) {
-        if (currentFrame <= lastReportedFrame) return
-        lastReportedFrame = currentFrame
-
-        if (currentFrame % updateEveryNFrames == 0 || currentFrame >= totalFrames) {
-            val progress = (currentFrame.toDouble() / totalFrames.toDouble()).toFloat()
-            bossBar.progress(progress.coerceIn(0.0f, 1.0f))
-            bossBar.name(formatTitle(currentFrame))
-        }
-
-        if (currentFrame >= totalFrames) {
-            bossBar.progress(1.0f)
-            bossBar.name(formatTitle(totalFrames))
-            Bukkit.getScheduler().runTaskLater(plugin, Runnable {
-                remove()
-            }, 40L)
-        }
+    fun onProgress(progress: Double) {
+        val clampedProgress = progress.coerceIn(0.0, 1.0).toFloat()
+        bossBar.progress(clampedProgress)
+        bossBar.name(formatTitle(clampedProgress))
     }
 
     fun remove() {
@@ -65,10 +50,11 @@ class RecordingBossBar(
         player.hideBossBar(bossBar)
     }
 
-    private fun formatTitle(current: Int): net.kyori.adventure.text.Component {
-        val percent = (current.toDouble() / totalFrames.toDouble() * 100).toInt()
+    private fun formatTitle(progress: Float): net.kyori.adventure.text.Component {
+        val percent = (progress * 100).toInt().coerceIn(0, 100)
+        val elapsedSeconds = (progress * totalSeconds).toInt().coerceIn(0, totalSeconds)
         return MiniMessage.miniMessage().deserialize(
-            "<gray>Recording <aqua>$cutsceneName</aqua> <dark_gray>|</dark_gray> <yellow>$percent%</yellow> <dark_gray>($current/$totalFrames)</dark_gray>"
+            "<gray>Recording <aqua>$cutsceneName</aqua> <dark_gray>|</dark_gray> <yellow>$percent%</yellow> <dark_gray>($elapsedSeconds/$totalSeconds s)</dark_gray>"
         )
     }
 
