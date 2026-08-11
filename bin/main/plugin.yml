@@ -2,7 +2,7 @@ name: nonscenes
 author: utophii
 main: com.nonxedy.Nonscenes
 description: Plugin for creation cutscenes 1.20-1.21.11
-version: 07-a
+version: 08-a
 prefix: nonscenes
 api-version: 1.20
 load: POSTWORLD
@@ -15,7 +15,7 @@ commands:
   nonscene:
     description: Main command for cutscene management
     aliases: [ns]
-    usage: /nonscene <start|delete|all|play|showpath> [name] [frames]
+    usage: /nonscene <start|delete|all|play|showpath> [name] [seconds]
     permission: nonscene.use
 
 permissions:
