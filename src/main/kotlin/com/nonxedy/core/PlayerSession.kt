@@ -10,7 +10,7 @@ sealed class PlayerSession {
     data class RecordingCountdown(
         override val playerId: UUID,
         override val name: String,
-        val totalFrames: Int,
+        val durationSeconds: Int,
         val secondsRemaining: Int
     ) : PlayerSession()
 

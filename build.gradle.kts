@@ -5,7 +5,7 @@ plugins {
 }
 
 group = "com.nonxedy"
-version = "07-a"
+version = "08-a"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -19,6 +19,7 @@ kotlin {
 repositories {
     mavenCentral()
     maven("https://repo.papermc.io/repository/maven-public/")
+    maven("https://repo.codemc.io/repository/maven-releases/")
 }
 
 dependencies {
@@ -27,6 +28,9 @@ dependencies {
 
     // LuckPerms API
     compileOnly("net.luckperms:api:5.4")
+
+    // PacketEvents for ASYNC_PACKET playback mode
+    compileOnly("com.github.retrooper:packetevents-spigot:2.7.0")
 
     // Kotlin runtime
     implementation(kotlin("stdlib"))
@@ -47,6 +51,12 @@ dependencies {
     implementation("org.xerial:sqlite-jdbc:3.50.3.0")
     implementation("org.mongodb:mongodb-driver-sync:5.6.1")
     implementation("redis.clients:jedis:7.0.0")
+
+    // Test dependencies
+    testImplementation("org.junit.jupiter:junit-jupiter:5.11.0")
+    testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.11.0")
+    testImplementation("org.mockito:mockito-core:5.12.0")
+    testImplementation("io.papermc.paper:paper-api:1.21.11-R0.1-SNAPSHOT")
 }
 
 tasks {
@@ -69,5 +79,9 @@ tasks {
 
     build {
         dependsOn(shadowJar)
+    }
+
+    test {
+        useJUnitPlatform()
     }
 }
