@@ -36,13 +36,13 @@ dependencies {
     implementation(kotlin("stdlib"))
 
     // SnakeYAML for config
-    implementation("org.yaml:snakeyaml:2.4")
+    implementation("org.yaml:snakeyaml:2.6")
 
     // Adventure text minimessage
     implementation("net.kyori:adventure-text-minimessage:4.24.0")
 
     // Apache Commons Lang
-    implementation("org.apache.commons:commons-lang3:3.18.0")
+    implementation("org.apache.commons:commons-lang3:3.20.0")
 
     // Database dependencies
     implementation("com.zaxxer:HikariCP:7.0.2")
