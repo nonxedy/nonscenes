@@ -51,22 +51,22 @@ class NonsceneCommand(private val plugin: Nonscenes) : CommandExecutor, TabCompl
                 }
 
                 val name = args[1]
-                val frames: Int
+                val seconds: Int
 
                 try {
-                    frames = args[2].toInt()
-                    if (frames <= 0) {
-                        val message = configManager.getMessage("invalid-frames-number")
+                    seconds = args[2].toInt()
+                    if (seconds <= 0 || seconds > 300) {
+                        val message = configManager.getMessage("invalid-duration")
                         player.sendMessage(message)
                         return true
                     }
                 } catch (e: NumberFormatException) {
-                    val message = configManager.getMessage("invalid-frames-number")
+                    val message = configManager.getMessage("invalid-duration")
                     player.sendMessage(message)
                     return true
                 }
 
-                cutsceneManager.startRecording(player, name, frames)
+                cutsceneManager.startRecording(player, name, seconds)
             }
 
             "delete" -> {

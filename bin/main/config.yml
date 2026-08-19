@@ -54,7 +54,6 @@ cutscene:
       enabled: true
       style: SOLID        # BossBar style: SOLID, SEGMENTED_6, SEGMENTED_10, SEGMENTED_12, SEGMENTED_20
       color: BLUE         # BossBar color: BLUE, GREEN, PINK, PURPLE, RED, WHITE, YELLOW
-      update-every-n-frames: 1
 
   recording:
     # How many server ticks pass between captured frames.

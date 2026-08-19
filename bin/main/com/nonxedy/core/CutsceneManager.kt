@@ -204,7 +204,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     }
 
     // Recording
-    override fun startRecording(player: Player, name: String, frames: Int) {
+    override fun startRecording(player: Player, name: String, seconds: Int) {
         val playerId = player.uniqueId
         if (playerSessions.containsKey(playerId)) {
             player.sendMessage(plugin.configManager.getMessage("already-recording"))
@@ -223,29 +223,29 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             plugin.configManager.getMessage("recording-countdown")?.replace("{seconds}", countdownSeconds.toString())
                 ?: "§aRecording will start in $countdownSeconds seconds..."
         )
-        playerSessions[playerId] = PlayerSession.RecordingCountdown(playerId, name, frames, countdownSeconds)
+        playerSessions[playerId] = PlayerSession.RecordingCountdown(playerId, name, seconds, countdownSeconds)
 
         val task = object : BukkitRunnable() {
-            var seconds = countdownSeconds
+            var remaining = countdownSeconds
             override fun run() {
                 if (!player.isOnline || playerSessions[playerId] !is PlayerSession.RecordingCountdown) {
                     cancel(); sessionTasks.remove(playerId); return
                 }
-                if (seconds > 0) {
-                    playerSessions[playerId] = PlayerSession.RecordingCountdown(playerId, name, frames, seconds)
+                if (remaining > 0) {
+                    playerSessions[playerId] = PlayerSession.RecordingCountdown(playerId, name, seconds, remaining)
                     player.sendMessage(
-                        plugin.configManager.getMessage("countdown")?.replace("{seconds}", seconds.toString()) ?: "§e$seconds..."
+                        plugin.configManager.getMessage("countdown")?.replace("{seconds}", remaining.toString()) ?: "§e$remaining..."
                     )
-                    seconds--
+                    remaining--
                 } else {
-                    cancel(); sessionTasks.remove(playerId); startRecordingProcess(player, name, frames)
+                    cancel(); sessionTasks.remove(playerId); startRecordingProcess(player, name, seconds)
                 }
             }
         }.runTaskTimer(plugin, 0L, 20L)
         sessionTasks[playerId] = task
     }
 
-    private fun startRecordingProcess(player: Player, name: String, totalFrames: Int) {
+    private fun startRecordingProcess(player: Player, name: String, durationSeconds: Int) {
         if (!player.isOnline) return
         val playerId = player.uniqueId
         val settings = plugin.configManager.getRecordingSettings()
@@ -283,7 +283,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             }
         )
         activeRecorders[playerId] = recorder
-        recorder.start(player, name, totalFrames)
+        recorder.start(player, name, durationSeconds)
     }
 
     // Playback
