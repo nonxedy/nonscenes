@@ -3,7 +3,6 @@
 ### Blockers
 
 - [x] Remove committed `bin/` from the repo and ignore it
-- [ ] Use the LuckPerms API for permission checks
 - [ ] Default playback to `ASYNC_PACKET` only - do not add a no-PacketEvents / `TICK` fallback
 - [ ] Remove `LINEAR` interpolation from config, code, tests, and docs
 - [ ] Reject or migrate existing cutscenes/settings that still request `LINEAR`
