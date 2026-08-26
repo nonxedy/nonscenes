@@ -23,13 +23,8 @@ settings:
 # ---------------------------------------------------------------------------
 cutscene:
   playback:
-    # Playback engine used to move the camera.
-    #   TICK          — main-thread teleports every tick (no PacketEvents required).
-    #   ASYNC_PACKET  — dedicated thread, packet-based, supports up to 240 Hz (default).
-    mode: ASYNC_PACKET
-
-    # Target update rate (Hz). Range 20–240.
-    # Requires PacketEvents installed on the server.
+    # Packet-based camera on a dedicated thread (20–240 Hz).
+    # PacketEvents is required
     update-rate: 60
 
     # Vertical offset added to the path so that the sitting (ridden) player's eye

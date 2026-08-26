@@ -15,11 +15,8 @@ import com.nonxedy.interpolator.PathInterpolator
 import com.nonxedy.model.Cutscene
 import com.nonxedy.model.CutsceneFrame
 import com.nonxedy.model.playback.InterpolationType
-import com.nonxedy.model.playback.PlaybackMode
-import com.nonxedy.model.playback.PlaybackSettings
 import com.nonxedy.playback.AsyncPacketPlaybackController
 import com.nonxedy.playback.CutscenePlaybackController
-import com.nonxedy.playback.TickPlaybackController
 import com.nonxedy.playback.PathBaker
 import com.nonxedy.recording.CutsceneRecorder
 import net.kyori.adventure.text.minimessage.MiniMessage
@@ -351,11 +348,13 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
             Unit
         }
 
-        val controller = if (settings.mode == PlaybackMode.TICK) {
-            TickPlaybackController(plugin, settings.rideHeightOffset, onComplete, onCancel)
-        } else {
-            AsyncPacketPlaybackController(plugin, settings.updateRate, settings.rideHeightOffset, onComplete, onCancel)
-        }
+        val controller = AsyncPacketPlaybackController(
+            plugin,
+            settings.updateRate,
+            settings.rideHeightOffset,
+            onComplete,
+            onCancel
+        )
         activeControllers[playerId] = controller
         controller.start(player, path, totalDurationMs)
     }
