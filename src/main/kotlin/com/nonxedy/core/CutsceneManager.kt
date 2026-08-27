@@ -10,7 +10,6 @@ import com.nonxedy.database.service.impl.RedisCutsceneDatabaseService
 import com.nonxedy.database.service.impl.SQLiteCutsceneDatabaseService
 import com.nonxedy.interpolator.BezierPathInterpolator
 import com.nonxedy.interpolator.CatmullRomPathInterpolator
-import com.nonxedy.interpolator.LinearPathInterpolator
 import com.nonxedy.interpolator.PathInterpolator
 import com.nonxedy.model.Cutscene
 import com.nonxedy.model.CutsceneFrame
@@ -360,7 +359,6 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
     }
 
     private fun createInterpolator(type: InterpolationType): PathInterpolator = when (type) {
-        InterpolationType.LINEAR -> LinearPathInterpolator()
         InterpolationType.CATMULL_ROM -> CatmullRomPathInterpolator()
         InterpolationType.BEZIER -> BezierPathInterpolator()
     }

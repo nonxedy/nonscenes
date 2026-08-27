@@ -33,7 +33,6 @@ data class PlaybackSettings private constructor(
 }
 
 enum class InterpolationType {
-    LINEAR,
     CATMULL_ROM,
     BEZIER
 }

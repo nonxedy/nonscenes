@@ -32,9 +32,8 @@ cutscene:
     # appears too low, decrease if too high (typical fine-tune range: 0.0–1.5).
     ride-height-offset: 0.75
 
-    # LINEAR      — straight lines between keyframes (fallback).
-    # CATMULL_ROM — smooth spline through all keyframes (recommended).
-    # BEZIER      — cubic Bezier with auto control points.
+    # CATMULL_ROM - smooth spline through all keyframes.
+    # BEZIER - cubic Bezier with auto control points.
     interpolation: CATMULL_ROM
 
     # Smooth rotation transitions (yaw/pitch wrapping handled automatically)
