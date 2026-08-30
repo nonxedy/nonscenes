@@ -6,7 +6,6 @@ import com.nonxedy.database.service.DatabaseType
 import com.nonxedy.database.service.impl.MongoDBCutsceneDatabaseService
 import com.nonxedy.database.service.impl.MySQLCutsceneDatabaseService
 import com.nonxedy.database.service.impl.PostgreSQLCutsceneDatabaseService
-import com.nonxedy.database.service.impl.RedisCutsceneDatabaseService
 import com.nonxedy.database.service.impl.SQLiteCutsceneDatabaseService
 import com.nonxedy.interpolator.BezierPathInterpolator
 import com.nonxedy.interpolator.CatmullRomPathInterpolator
@@ -95,12 +94,6 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
                 val credentials = if (username.isNotBlank()) "$username:$password@" else ""
                 MongoDBCutsceneDatabaseService("mongodb://$credentials$host:$port", database)
             }
-            DatabaseType.REDIS -> RedisCutsceneDatabaseService(
-                host = config?.getString("storage.redis.host") ?: "localhost",
-                port = config?.getInt("storage.redis.port", 6379) ?: 6379,
-                password = config?.getString("storage.redis.password").takeUnless { it.isNullOrBlank() },
-                database = config?.getInt("storage.redis.database", 0) ?: 0
-            )
         }
     }
 
