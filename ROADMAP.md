@@ -6,7 +6,7 @@
 - [x] Default playback to `ASYNC_PACKET` only - do not add a no-PacketEvents / `TICK` fallback
 - [x] Remove `LINEAR` interpolation from config, code, tests, and docs
 - [x] Remove Redis storage (in-memory, data loss, blocking `KEYS`)
-- [ ] Sanitize cutscene names (`[a-zA-Z0-9_-]` only) to prevent path traversal
+- [x] Sanitize cutscene names (`[a-zA-Z0-9_-]` only) to prevent path traversal
 - [ ] Fix `showpath` duration (task period is 5 ticks, counter treats it as 1 tick)
 - [ ] Start async packet playback only after the armor stand is spawned
 - [ ] Attach a real plugin JAR to GitHub Releases (CI `shadowJar` artifact)
