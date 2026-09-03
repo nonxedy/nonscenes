@@ -434,10 +434,11 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
         }
 
         val task = object : BukkitRunnable() {
-            var tickCounter = 0
+            var elapsedTicks = 0
+            val periodTicks = 5
             val totalTicks = durationSeconds * 20
             override fun run() {
-                if (tickCounter >= totalTicks) {
+                if (elapsedTicks >= totalTicks) {
                     cancel(); playerSessions.remove(playerId); sessionTasks.remove(playerId); return
                 }
                 for (i in 0 until resolvedFrames.size - 1) {
@@ -456,7 +457,7 @@ class CutsceneManager(private val plugin: Nonscenes) : CutsceneManagerInterface 
                 for (loc in resolvedFrames) {
                     loc.world.spawnParticle(Particle.FLAME, loc.x, loc.y, loc.z, 3, 0.1, 0.1, 0.1, 0.01)
                 }
-                tickCounter++
+                elapsedTicks += periodTicks
             }
         }.runTaskTimer(plugin, 0L, 5L)
         sessionTasks[playerId] = task
